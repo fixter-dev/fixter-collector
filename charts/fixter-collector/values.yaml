@@ -37,7 +37,9 @@ cluster:
     limits:
       memory: 512Mi
 
-# Hardened defaults for a public chart. Overridable, but sane out of the box:
+# Hardened defaults, applied to the CLUSTER collector. The agent overrides these
+# (see agent.podSecurityContext) — it must read root-owned host files.
+# Overridable, but sane out of the box:
 # the image already runs as 10001, the collector writes nothing to its rootfs
 # (config is a mounted ConfigMap; no filelog on-disk checkpoint), and both host
 # mounts are read-only — so readOnlyRootFilesystem holds. Applied to BOTH
@@ -63,6 +65,24 @@ agent:
   enabled: true
   otlpRelay: true
   hostMetrics: true
+  # The agent MUST run as root. /var/log/pods on EKS (and most containerd
+  # distros) is root-owned, so a non-root agent silently reads NOTHING:
+  # file_log starts, can open no file, logs no error, and the pod stays Ready
+  # while collecting zero logs. kind's permissions are permissive, so a kind
+  # smoke test CANNOT catch this — only a real cluster can. Every log-collecting
+  # DaemonSet (Fluent Bit, Datadog, Vector) runs as root for the same reason:
+  # reading root-owned host logs is inherently privileged.
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
   logs:
     enabled: true
     # The collector's own pods are ALWAYS excluded regardless of this list.
