@@ -1,0 +1,81 @@
+nameOverride: ""
+
+image:
+  repository: ghcr.io/fixter-dev/fixter-collector
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+fixter:
+  # The ONLY required value. The chart creates a Secret from it.
+  apiKey: ""
+  # Bring-your-own Secret instead. Mutually exclusive with apiKey.
+  existingSecret: ""
+  existingSecretKey: FIXTER_API_KEY
+  # Defaults to Fixter's public ingest — a customer should never need to set this.
+  endpoint: https://ingest.fixter.dev
+  environment: production      # -> deployment.environment
+  # Set this to disambiguate clusters in Fixter. NOT auto-detected — when empty,
+  # k8s.cluster.name is simply absent, so multi-cluster telemetry is
+  # indistinguishable. Strongly recommended if you run more than one cluster.
+  clusterName: ""
+
+cluster:
+  enabled: true
+  clusterMetrics: true
+  # NOTE: replicas is deliberately not configurable. k8s_cluster and prometheus
+  # duplicate their output per replica, so >1 double-counts rather than adds HA.
+  # The singleton must still be able to schedule on a fully-tainted cluster, or
+  # it sits Pending forever and cluster metrics vanish silently (same failure the
+  # agent's tolerations guard against). Default tolerates everything; constrain
+  # by overriding.
+  tolerations:
+    - operator: Exists
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Hardened defaults for a public chart. Overridable, but sane out of the box:
+# the image already runs as 10001, the collector writes nothing to its rootfs
+# (config is a mounted ConfigMap; no filelog on-disk checkpoint), and both host
+# mounts are read-only — so readOnlyRootFilesystem holds. Applied to BOTH
+# collectors. Kept permissive enough to pass baseline PSA; restricted PSA users
+# can layer more via these same keys.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+integrations:
+  prometheus:
+    targets: []   # [{job, endpoints, interval}]
+
+agent:
+  enabled: true
+  otlpRelay: true
+  hostMetrics: true
+  logs:
+    enabled: true
+    # The collector's own pods are ALWAYS excluded regardless of this list.
+    excludeNamespaces:
+      - kube-system
+    excludePods: []
+  # Tolerate everything by default. A DaemonSet that cannot schedule on a
+  # tainted node produces no telemetry and no error — silent blindness.
+  tolerations:
+    - operator: Exists
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

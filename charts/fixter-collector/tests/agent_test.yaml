@@ -1,0 +1,119 @@
+suite: agent collector
+templates:
+  - configmap-agent.yaml
+  - daemonset-agent.yaml
+  - service-agent.yaml
+  - secret.yaml
+tests:
+  - it: is a DaemonSet
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - isKind:
+          of: DaemonSet
+
+  - it: tolerates all taints by default so no node is silently skipped
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.tolerations
+          content:
+            operator: Exists
+
+  - it: always excludes its own pods from file_log even with no user excludes
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.excludeNamespaces: []
+    asserts:
+      # Assert the own-pod pattern is the FIRST exclude entry, not merely
+      # present — the ordering (own pods before user excludes) is the contract.
+      # Allows the template's leading comment lines between `exclude:` and the
+      # first bullet, but no other bullet may come before the own-pod one.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "exclude:\\s*\\n(\\s*#[^\\n]*\\n)*\\s*- /var/log/pods/\\*_RELEASE-NAME-fixter-collector"
+
+  - it: routes the agent GOMEMLIMIT through the Go-format helper, not raw k8s
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOMEMLIMIT
+            value: "512MiB"
+
+  - it: uses the canonical otlp_http exporter key in agent config, not the alias
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "otlp_http:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "otlphttp:"
+
+  - it: wires otlp into the traces pipeline as a RECEIVER when relay is on
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.otlpRelay: true
+      agent.logs.enabled: true
+    asserts:
+      # Pin otlp as the traces RECEIVER. A loose match falsely hits otlp_http on
+      # the exporters line (verified by mutation: passed with receivers: [BOGUS]).
+      # The traces pipeline renders its receivers in flow style (`[otlp]`)
+      # rather than block style (`- otlp`), so match either form.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "traces:\\s*\\n\\s*receivers: \\[otlp\\]"
+
+  - it: honours excludeNamespaces
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.excludeNamespaces:
+        - kube-system
+        - istio-system
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "/var/log/pods/istio-system_"
+
+  - it: drops the file_log receiver entirely when logs are disabled
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log:"
+
+  - it: exposes OTLP http for app relay
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: otlp-http
+            containerPort: 4318
+            protocol: TCP
+
+  - it: keeps app OTLP traffic on the local node
+    template: service-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - equal:
+          path: spec.internalTrafficPolicy
+          value: Local

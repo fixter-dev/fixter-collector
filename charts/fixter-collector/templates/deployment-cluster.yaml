@@ -1,0 +1,73 @@
+{{- include "fixter-collector.validate" . }}
+{{- if .Values.cluster.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}-cluster
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+spec:
+  # Exactly 1, never configurable: k8s_cluster and prometheus duplicate their
+  # output per replica, so scaling this double-counts rather than adds HA.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fixter-collector.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: cluster
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-cluster.yaml") . | sha256sum }}
+        # Restart on API-key rotation too — otherwise `helm upgrade --set
+        # fixter.apiKey=new` updates the Secret but pods keep the old key.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: {{ include "fixter-collector.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: cluster
+    spec:
+      serviceAccountName: {{ include "fixter-collector.serviceAccountName" . }}
+      {{- with .Values.cluster.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: collector
+          image: {{ include "fixter-collector.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - --config=/conf/config.yaml
+          env:
+            - name: FIXTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fixter-collector.secretName" . }}
+                  key: {{ include "fixter-collector.secretKey" . }}
+            - name: GOMEMLIMIT
+              value: {{ include "fixter-collector.goMemLimit" .Values.cluster.resources.limits.memory | quote }}
+          ports:
+            - name: health
+              containerPort: 13133
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+          resources:
+            {{- toYaml .Values.cluster.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "fixter-collector.fullname" . }}-cluster
+{{- end }}

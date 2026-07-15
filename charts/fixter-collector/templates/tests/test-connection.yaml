@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}-test-connection
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+      env:
+        - name: FIXTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "fixter-collector.secretName" . }}
+              key: {{ include "fixter-collector.secretKey" . }}
+        # Endpoint passed via env, NOT interpolated into the shell string — a
+        # single quote in the value would otherwise break quoting and inject.
+        - name: FIXTER_ENDPOINT
+          value: {{ .Values.fixter.endpoint | quote }}
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          # `|| echo 000` is load-bearing: on a real connection failure curl
+          # exits non-zero, which under `set -eu` would kill the script at this
+          # line — before the case runs — so the unreachable-endpoint path would
+          # fail SILENTLY. The most likely real failure (customer egress/firewall
+          # blocking ingest) is exactly the one this guards.
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST "${FIXTER_ENDPOINT}/v1/metrics" \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${FIXTER_API_KEY}" \
+            -d '{"resourceMetrics":[]}' \
+            --max-time 15 || echo 000)
+          echo "ingest returned HTTP ${CODE}"
+          case "${CODE}" in
+            401|403)
+              echo "FAIL: Fixter rejected the API key."
+              echo "The collector will run and report healthy while sending nothing."
+              echo "Check fixter.apiKey, or regenerate at https://fixter.dev -> Settings -> API Keys"
+              exit 1 ;;
+            000)
+              echo "FAIL: could not reach ${FIXTER_ENDPOINT} (DNS, egress, or firewall)."
+              exit 1 ;;
+            2*)
+              echo "OK: endpoint reachable and key accepted."
+              exit 0 ;;
+            *)
+              echo "FAIL: unexpected status ${CODE} from ingest."
+              exit 1 ;;
+          esac

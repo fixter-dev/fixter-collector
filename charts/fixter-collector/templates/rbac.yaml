@@ -1,0 +1,45 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - events
+      - namespaces
+      - nodes
+      - nodes/proxy
+      - nodes/stats
+      - pods
+      - replicationcontrollers
+      - resourcequotas
+      - services
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  # k8s_cluster collects HPA metrics by default; without this grant it drops
+  # them and spam-logs "failed to watch horizontalpodautoscalers ... forbidden".
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "fixter-collector.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "fixter-collector.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
