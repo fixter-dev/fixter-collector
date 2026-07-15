@@ -1,0 +1,22 @@
+{{- if and .Values.agent.enabled .Values.agent.otlpRelay }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}-agent
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  internalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: {{ include "fixter-collector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+{{- end }}

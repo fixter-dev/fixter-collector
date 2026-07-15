@@ -1,0 +1,71 @@
+{{- include "fixter-collector.validate" . }}
+{{- if .Values.cluster.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}-cluster
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      bearertokenauth:
+        scheme: Bearer
+        token: ${env:FIXTER_API_KEY}
+    receivers:
+      {{- if .Values.cluster.clusterMetrics }}
+      k8s_cluster:
+        auth_type: serviceAccount
+        collection_interval: 30s
+      {{- end }}
+      {{- if .Values.integrations.prometheus.targets }}
+      prometheus:
+        config:
+          scrape_configs:
+            {{- range .Values.integrations.prometheus.targets }}
+            - job_name: {{ .job | quote }}
+              scrape_interval: {{ default "30s" .interval }}
+              static_configs:
+                - targets:
+                    {{- range .endpoints }}
+                    - {{ . | quote }}
+                    {{- end }}
+            {{- end }}
+      {{- end }}
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      resource_detection:
+        # Cloud detectors (eks/aks/gcp) are deliberately NOT used — see Global Constraints.
+        # `eks` loads a live in-cluster client at CONSTRUCTION, which breaks `validate`
+        detectors: [env, system]
+        timeout: 5s
+        override: false
+      resource:
+        attributes:
+          {{- include "fixter-collector.resourceAttributes" . | nindent 10 }}
+      batch:
+        timeout: 10s
+    exporters:
+      otlp_http:
+        endpoint: {{ .Values.fixter.endpoint }}
+        auth:
+          authenticator: bearertokenauth
+    service:
+      extensions: [health_check, bearertokenauth]
+      pipelines:
+        metrics:
+          receivers:
+            {{- if .Values.cluster.clusterMetrics }}
+            - k8s_cluster
+            {{- end }}
+            {{- if .Values.integrations.prometheus.targets }}
+            - prometheus
+            {{- end }}
+          processors: [memory_limiter, resource_detection, resource, batch]
+          exporters: [otlp_http]
+{{- end }}

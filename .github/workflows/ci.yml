@@ -1,0 +1,91 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Actions pinned to full patch version tags (@v7.0.0, not @v7) — a specific
+# immutable release, readable. Runners are GitHub-hosted arm64 (ubuntu-24.04-arm).
+env:
+  GO_VERSION: '1.26.5'
+  HELM_VERSION: 'v4.2.3'          # primary target
+  KIND_VERSION: 'v0.32.0'
+  KIND_NODE_IMAGE: 'kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5'
+  UNITTEST_VERSION: 'v1.1.1'
+
+jobs:
+  # Two cells: Helm 4 is what customers get from `latest`; Helm 3.21 is the
+  # compat guard until its 2027-02-10 security EOL. Same chart, no conditionals
+  # — the matrix only catches accidental dependence on Helm-4-only behaviour.
+  chart:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        helm: ['v4.2.3', 'v3.21.3']
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: ${{ matrix.helm }}   # REQUIRED: default 'latest' is a moving target
+      - name: Confirm the Helm under test is the one we asked for
+        run: helm version --short | grep -q "^${{ matrix.helm }}" || { echo "wanted ${{ matrix.helm }}, got $(helm version --short)"; exit 1; }
+      - name: Install helm-unittest (pinned)
+        # Helm 4 requires --verify=false for git sources; Helm 3 has no such flag.
+        run: |
+          if helm version --short | grep -q '^v4\.'; then
+            helm plugin install https://github.com/helm-unittest/helm-unittest.git --version ${{ env.UNITTEST_VERSION }} --verify=false
+          else
+            helm plugin install https://github.com/helm-unittest/helm-unittest.git --version ${{ env.UNITTEST_VERSION }}
+          fi
+      - run: helm lint charts/fixter-collector
+      - run: helm unittest charts/fixter-collector
+
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25   # collector compiles from source (~7.5 min arm64); bounded, not GitHub's 360 default
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: actions/setup-go@v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - run: ./scripts/build.sh
+      - name: Assert the component set and versions
+        run: |
+          ./_build/fixter-collector --version | grep -qx 'fixter-collector version 0.1.0'
+          # Any module NOT on a pinned stream is a component that resolved to an
+          # unintended version — the exact failure strict versioning misses.
+          if ./_build/fixter-collector components | grep "module:" | grep -v "v0.156.0" | grep -v "v1.62.0"; then
+            echo "unpinned component version above"; exit 1
+          fi
+      - name: Validate every rendered config against the real binary
+        run: ./scripts/validate.sh
+
+  smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25   # builds the image (compile) + kind cluster + install + assert
+    needs: [chart, build]
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: actions/setup-go@v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: fixter-smoke
+          version: ${{ env.KIND_VERSION }}        # default is v0.31.0, not what we want
+          node_image: ${{ env.KIND_NODE_IMAGE }}  # default follows kind's version, not ours
+      # kind-action (above) creates the pinned cluster; smoke.sh builds+loads the
+      # image, installs the chart, and asserts telemetry reaches the sink. Helm 4
+      # defaults new installs to server-side apply, so this exercises SSA for real.
+      - name: Smoke test — assert telemetry reaches an OTLP sink
+        run: ./scripts/smoke.sh
+      - name: Dump logs on failure
+        if: failure()
+        run: kubectl logs -l app.kubernetes.io/name=fixter-collector --all-containers --tail=100

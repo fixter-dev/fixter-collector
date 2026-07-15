@@ -1,0 +1,198 @@
+suite: cluster collector
+templates:
+  - configmap-cluster.yaml
+  - deployment-cluster.yaml
+  - secret.yaml
+  - rbac.yaml
+tests:
+  - it: creates a Secret from apiKey so no pre-step is needed
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - isKind:
+          of: Secret
+      - equal:
+          path: stringData.FIXTER_API_KEY
+          value: test-key-123
+
+  - it: creates no Secret when bringing your own
+    template: secret.yaml
+    set:
+      fixter.existingSecret: my-secret
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: installs with only apiKey set
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.replicas
+          value: 1
+
+  - it: defaults the endpoint to Fixter ingest
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "endpoint: https://ingest.fixter.dev"
+
+  - it: uses the canonical otlp_http exporter key, not the deprecated alias
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "otlp_http:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "otlphttp:"
+
+  - it: sets memory limits so memory_limiter is not a no-op
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 512Mi
+
+  - it: passes --config explicitly because the image bakes none
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --config=/conf/config.yaml
+
+  # Regression: the singleton must schedule on a fully-tainted cluster, or
+  # cluster metrics vanish silently (Pending forever).
+  - it: tolerates all taints by default so the singleton always schedules
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.tolerations
+          content:
+            operator: Exists
+
+  # Regression: a public chart mounting host paths must ship hardened, and
+  # readOnlyRootFilesystem must hold (the collector writes nothing to rootfs).
+  - it: hardens the container security context
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+
+  # Regression: rotating the API key must restart pods (checksum/secret), else
+  # the new key is in the Secret but pods keep the old one until manual bounce.
+  - it: annotates a secret checksum so key rotation restarts pods
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - exists:
+          path: spec.template.metadata.annotations["checksum/secret"]
+
+  # Regression: GOMEMLIMIT in Kubernetes format (512Mi) aborts the Go runtime
+  # during init with `malformed GOMEMLIMIT` — before main(), so the pod
+  # crash-loops with no collector log. Go needs 512MiB.
+  - it: converts the memory limit to Go's GOMEMLIMIT format, not Kubernetes'
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOMEMLIMIT
+            value: "512MiB"
+
+  - it: refuses a decimal memory limit rather than shipping a crash-loop
+    template: deployment-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      cluster.resources.limits.memory: 512M
+    asserts:
+      - failedTemplate:
+          errorPattern: "must use a binary suffix"
+
+  - it: omits k8s.cluster.name when clusterName is unset (not auto-detected)
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s.cluster.name"
+
+  - it: sets k8s.cluster.name when explicitly overridden
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      fixter.clusterName: my-cluster
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "value: \"my-cluster\""
+
+  # `errorPattern` (regex, substring) NOT `errorMessage` (exact, reflect.DeepEqual).
+  # Our fail text is longer than the fragment we care about, so exact match fails.
+  # Keep these patterns free of regex metacharacters — parens would become a
+  # capture group and silently match text that has no parens.
+  #
+  # These two assert on secret.yaml, NOT configmap-cluster.yaml. All three
+  # templates call the same `validate` guard (deliberately — secret.yaml's is
+  # load-bearing when cluster.enabled=false), but Helm renders same-depth files
+  # in reverse-alphabetical order, so secret.yaml always raises first and
+  # helm-unittest attributes the failure to it. The chart behaviour is correct
+  # either way; only the attribution is order-dependent.
+  - it: refuses to render with no credentials at all
+    template: secret.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "no Fixter credentials"
+
+  - it: refuses both apiKey and existingSecret
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+      fixter.existingSecret: my-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: "not both"
+
+  # Regression: k8s_cluster collects HPA metrics by default; a missing
+  # autoscaling grant drops them and spam-logs forbidden errors (found in a
+  # real kind cluster). documentIndex 0 is the ClusterRole.
+  - it: grants HPA read so k8s_cluster neither drops HPA metrics nor errors
+    template: rbac.yaml
+    documentIndex: 0
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["autoscaling"]
+            resources: ["horizontalpodautoscalers"]
+            verbs: ["get", "list", "watch"]

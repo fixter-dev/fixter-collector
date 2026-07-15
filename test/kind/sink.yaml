@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otlp-sink
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+    exporters:
+      debug:
+        verbosity: detailed
+    service:
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          exporters: [debug]
+        logs:
+          receivers: [otlp]
+          exporters: [debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otlp-sink
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: otlp-sink}
+  template:
+    metadata:
+      labels: {app: otlp-sink}
+    spec:
+      containers:
+        - name: sink
+          image: otel/opentelemetry-collector-contrib:0.156.0
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - containerPort: 4318
+          volumeMounts:
+            - {name: config, mountPath: /conf}
+      volumes:
+        - name: config
+          configMap: {name: otlp-sink}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otlp-sink
+spec:
+  selector: {app: otlp-sink}
+  ports:
+    - port: 4318
+      targetPort: 4318

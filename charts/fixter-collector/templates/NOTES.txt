@@ -1,0 +1,26 @@
+fixter-collector {{ .Chart.AppVersion }} is installed.
+
+Shipping to: {{ .Values.fixter.endpoint }}
+Environment: {{ .Values.fixter.environment }}
+{{- if .Values.fixter.clusterName }}
+Cluster:     {{ .Values.fixter.clusterName }}
+{{- end }}
+
+1. Verify your API key actually works — do this first, a bad key fails silently:
+
+   helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{ if .Values.agent.otlpRelay -}}
+2. Point your apps at the node-local agent:
+
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://{{ include "fixter-collector.fullname" . }}-agent.{{ .Release.Namespace }}.svc.cluster.local:4318
+   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+
+{{ end -}}
+3. Your data lands at https://fixter.dev within ~1 minute.
+
+{{ if .Values.agent.logs.enabled -}}
+Pod logs are ON. Excluded: the collector's own pods{{ range .Values.agent.logs.excludeNamespaces }}, {{ . }}{{ end }}.
+Rough volume: 10k logs/s of ~216-byte lines is ~186 GB/day. Trim with
+agent.logs.excludeNamespaces / excludePods, or set agent.logs.enabled=false.
+{{ end -}}

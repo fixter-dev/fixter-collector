@@ -1,0 +1,132 @@
+{{- include "fixter-collector.validate" . }}
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fixter-collector.fullname" . }}-agent
+  labels:
+    {{- include "fixter-collector.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      bearertokenauth:
+        scheme: Bearer
+        token: ${env:FIXTER_API_KEY}
+    receivers:
+      {{- if .Values.agent.otlpRelay }}
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      {{- end }}
+      kubelet_stats:
+        collection_interval: 30s
+        auth_type: serviceAccount
+        endpoint: "https://${env:K8S_NODE_NAME}:10250"
+        insecure_skip_verify: true
+      {{- if .Values.agent.hostMetrics }}
+      host_metrics:
+        collection_interval: 30s
+        root_path: /hostfs
+        scrapers:
+          cpu:
+          memory:
+          filesystem:
+          network:
+          load:
+      {{- end }}
+      {{- if .Values.agent.logs.enabled }}
+      file_log:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          # Never ship our own logs: that makes the collector log about shipping
+          # logs, ship that, and log about it. Not configurable, by design.
+          - /var/log/pods/*_{{ include "fixter-collector.fullname" . }}*_*/*/*.log
+          {{- range .Values.agent.logs.excludeNamespaces }}
+          - /var/log/pods/{{ . }}_*/*/*.log
+          {{- end }}
+          {{- range .Values.agent.logs.excludePods }}
+          - /var/log/pods/*_{{ . }}*_*/*/*.log
+          {{- end }}
+        start_at: end
+        include_file_path: true
+        operators:
+          - type: container
+            id: container-parser
+      {{- end }}
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      k8s_attributes:
+        auth_type: serviceAccount
+        passthrough: false
+        filter:
+          node_from_env_var: K8S_NODE_NAME
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.node.name
+            - k8s.container.name
+            - k8s.deployment.name
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
+      resource_detection:
+        detectors: [env, system]
+        timeout: 5s
+        override: false
+      resource:
+        attributes:
+          {{- include "fixter-collector.resourceAttributes" . | nindent 10 }}
+      batch:
+        timeout: 10s
+    exporters:
+      otlp_http:
+        endpoint: {{ .Values.fixter.endpoint }}
+        auth:
+          authenticator: bearertokenauth
+    service:
+      extensions: [health_check, bearertokenauth]
+      pipelines:
+        metrics:
+          receivers:
+            - kubelet_stats
+            {{- if .Values.agent.hostMetrics }}
+            - host_metrics
+            {{- end }}
+            {{- if .Values.agent.otlpRelay }}
+            - otlp
+            {{- end }}
+          processors: [memory_limiter, k8s_attributes, resource_detection, resource, batch]
+          exporters: [otlp_http]
+        {{- if or .Values.agent.logs.enabled .Values.agent.otlpRelay }}
+        logs:
+          receivers:
+            {{- if .Values.agent.logs.enabled }}
+            - file_log
+            {{- end }}
+            {{- if .Values.agent.otlpRelay }}
+            - otlp
+            {{- end }}
+          processors: [memory_limiter, k8s_attributes, resource_detection, resource, batch]
+          exporters: [otlp_http]
+        {{- end }}
+        {{- if .Values.agent.otlpRelay }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8s_attributes, resource_detection, resource, batch]
+          exporters: [otlp_http]
+        {{- end }}
+{{- end }}

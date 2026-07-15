@@ -1,0 +1,10 @@
+image:
+  repository: ghcr.io/fixter-dev/fixter-collector
+  tag: dev
+  pullPolicy: Never
+
+fixter:
+  apiKey: ci-dummy-key
+  endpoint: http://otlp-sink.default.svc.cluster.local:4318
+  environment: ci
+  clusterName: kind-ci
