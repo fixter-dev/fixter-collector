@@ -4,8 +4,8 @@ apiVersion: v2
 name: fixter-collector
 description: Fixter OpenTelemetry Collector — infrastructure telemetry for Kubernetes
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.1
+appVersion: "0.1.1"
 kubeVersion: ">=1.23.0-0"
 home: https://github.com/fixter-dev/fixter-collector
 sources:

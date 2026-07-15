@@ -28,13 +28,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.agent.podSecurityContext | nindent 8 }}
       containers:
         - name: collector
           image: {{ include "fixter-collector.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml .Values.agent.securityContext | nindent 12 }}
           args:
             - --config=/conf/config.yaml
           env:

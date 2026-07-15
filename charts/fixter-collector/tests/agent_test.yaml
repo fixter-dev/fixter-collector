@@ -117,3 +117,19 @@ tests:
       - equal:
           path: spec.internalTrafficPolicy
           value: Local
+
+  # Regression: a non-root agent CANNOT read /var/log/pods on EKS (root-owned)
+  # and silently collects zero logs — file_log logs no error and the pod stays
+  # Ready. kind's perms are permissive so a smoke test cannot catch it. Verified
+  # on a real EKS node: as uid 10001, `ls /var/log/pods` -> Permission denied.
+  - it: runs the agent as root so it can read root-owned pod logs
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 0
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: false
