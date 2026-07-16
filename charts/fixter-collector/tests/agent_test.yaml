@@ -318,18 +318,99 @@ tests:
           pattern: "error: 50"
 
   # Serilog's "[09:00:03 INF]" captures INF, which is not a severity name stanza
-  # knows — without the mapping it yields SeverityNumber Unspecified(0).
-  - it: maps abbreviated text levels so Serilog-style logs get a real severity
+  # knows — without the mapping it yields SeverityNumber Unspecified(0). Same for
+  # ClickHouse's <Information>/<Notice>, MySQL's [Note]/[System] and Postgres'
+  # LOG:/PANIC.
+  - it: maps vendor level names so Serilog, ClickHouse, MySQL and Postgres resolve
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "info: \\[inf\\]"
+          pattern: 'info: \["inf","information","notice","note","system","log:"\]'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "fatal: \\[crit, critical\\]"
+          pattern: 'fatal: \["crit","critical","panic"\]'
+
+  # Regression: rendering the mapping with `join` leaves values unquoted, and an
+  # unquoted `log:` inside a YAML flow sequence parses as a nested MAP — the
+  # collector then refuses to start with "type map[string]interface {} cannot be
+  # parsed as a severity" and the node ships NO logs. yq hides this by re-quoting
+  # on display; only the raw text and the real binary show it.
+  - it: quotes severity mapping values so a trailing colon cannot become a map
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '"log:"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: '\[[^]"]*log:\]'
+
+  # glog encodes severity as a single leading letter (Doris BE: "I0716 ..."). No
+  # word-based regex can reach it, so it gets its own route.
+  - it: routes glog logs so Doris BE gets a severity
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "id: glog-severity"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'body matches "\^\[IWEF\]\\\\d\{4\} "'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'error: \["e"\]'
+
+  - it: can turn the glog route off without touching the other paths
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.glog.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "glog-severity"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "id: json-severity"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "id: text-severity"
+
+  # ClickHouse stack frames are numbered ("0. DB::Exception... @ 0x...") rather
+  # than indented, so the universal leading-whitespace rule misses them.
+  - it: treats numbered stack frames as continuations for ClickHouse
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\\\\d\+\\\\\.\\\\s'
+
+  - it: recognises database level words in the text severity pattern
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      # Postgres LOG keeps its colon: bare "LOG" is too generic and would tag any
+      # line mentioning a log file.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "LOG:"
+      # Longest-first, or INFO would consume the start of INFORMATION.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'INFORMATION\\b\|INFO\\b\|INF\\b'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'DEBUG\[1-5\]\\b\|DEBUG\\b'
 
   # Python's default asctime is "2026-07-16 09:00:02,124" — date and time split
   # by a space — so an ISO-anchored `^\S+\s+LEVEL` never reaches the level.
@@ -341,9 +422,9 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: '\(\?i\)\^\.\{0,48\}\?'
-      - matchRegex:
+      - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "INFO\\|INF"
+          pattern: 'severityRegex.*\^\\\\S\+\\\\s\+'
 
   - it: lets an operator override the JSON severity field
     template: configmap-agent.yaml

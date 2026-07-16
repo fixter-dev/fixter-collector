@@ -84,6 +84,10 @@ data:
             routes:
               - expr: 'body matches "^\\s*\\{"'
                 output: json-severity
+              {{- if .glog.enabled }}
+              - expr: 'body matches "{{ .glog.detectRegex | replace "\\" "\\\\" }}"'
+                output: glog-severity
+              {{- end }}
             default: text-severity
           # Both parsers are send_quiet on error: an unrecognised format must
           # degrade to "no severity", never to "no log".
@@ -101,6 +105,26 @@ data:
                 {{ $level }}: {{ $value }}
                 {{- end }}
               {{- end }}
+          {{- if .glog.enabled }}
+          - type: regex_parser
+            id: glog-severity
+            parse_from: body
+            regex: '{{ .glog.severityRegex }}'
+            parse_to: attributes
+            on_error: send_quiet
+            output: parsed
+            severity:
+              parse_from: attributes.severity
+              {{- with .glog.severityMapping }}
+              mapping:
+                {{- range $level, $values := . }}
+                # toJson, not join: it quotes each value. An unquoted `log:` in a
+                # YAML flow sequence parses as a nested map, and the collector
+                # then refuses to start ("cannot be parsed as a severity").
+                {{ $level }}: {{ $values | toJson }}
+                {{- end }}
+              {{- end }}
+          {{- end }}
           - type: regex_parser
             id: text-severity
             parse_from: body
@@ -113,7 +137,10 @@ data:
               {{- with .text.severityMapping }}
               mapping:
                 {{- range $level, $values := . }}
-                {{ $level }}: [{{ join ", " $values }}]
+                # toJson, not join: it quotes each value. An unquoted `log:` in a
+                # YAML flow sequence parses as a nested map, and the collector
+                # then refuses to start ("cannot be parsed as a severity").
+                {{ $level }}: {{ $values | toJson }}
                 {{- end }}
               {{- end }}
           # Both routes converge here; without it json-severity would fall

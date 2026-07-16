@@ -125,6 +125,11 @@ Verified against real output from these formats:
 | Go (logrus text, logfmt) | yes | yes |
 | Go (`log` stdlib) | yes | no level in the line to find |
 | .NET (default console, Serilog) | yes | yes |
+| glog — Doris BE, and anything glog-based | yes | yes |
+| PostgreSQL (`LOG:`, `ERROR:`, `FATAL:`, …) | yes | yes |
+| MySQL (`[System]`, `[Note]`, `[Warning]`, `[ERROR]`) | yes | yes |
+| Doris FE (log4j) | yes | yes |
+| ClickHouse (`<Information>`, `<Error>`, … + numbered stack frames) | yes | yes |
 
 Both paths are best-effort. A format neither recognises still ships — it just
 arrives without a severity. **Nothing is ever dropped for being unparseable.**
@@ -142,8 +147,19 @@ agent:
       json:
         severityField: level      # e.g. severity_text, levelname
       text:
-        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE|DEBUG|INFO|...)\b'
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE\b|DEBUG\b|INFO\b|...)'
+      glog:
+        enabled: true             # Doris BE and other glog users ("I0716 ...")
 ```
+
+Levels that are not one of the six OTel names — Serilog's `INF`, ClickHouse's
+`<Information>`, MySQL's `[Note]`, Postgres' `LOG:`, pino's numeric `30` — are
+resolved through `severityMapping` under each path. Add your own there rather
+than widening the regex.
+
+There is no AWS log support because there is nothing to support: the distro
+builds no AWS receivers (`filelog`, `hostmetrics`, `k8scluster`, `kubeletstats`,
+`otlp`, `prometheus`).
 
 Note the direction: the pattern describes a **continuation**, not a record
 start. That is deliberate. With the inverse, any format the pattern doesn't

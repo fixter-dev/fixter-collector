@@ -112,14 +112,32 @@ agent:
       #
       # Covers indented frames (universal: Java `\tat`, Python `  File`, Go
       # `\t/app/x.go:10`, C# `   at`, JS `    at`) plus the unindented lines that
-      # are unambiguously part of a trace.
-      continuationRegex: '^(\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
+      # are unambiguously part of a trace. `\d+\.\s` is ClickHouse, whose stack
+      # frames are numbered ("0. DB::Exception::Exception(...) @ 0x... in ...")
+      # and start with a digit rather than an indent. Its own log lines are not
+      # caught by it: "2026.07.16 09:00:00" has no space after the first dot.
+      continuationRegex: '^(\s|\d+\.\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
       # Bounds the buffer: flush a held-open record after this long with no new
       # line, and never let one grow past this size.
       forceFlushPeriod: 5s
       # Keep the unit suffix: a bare 1048576 renders through Helm as the float
       # 1.048576e+06, which is legal but unreadable in a shipped config.
       maxLogSize: 1MiB
+      glog:
+        # glog encodes severity as a single leading letter (I/W/E/F) followed by
+        # MMDD — "I0716 09:00:00.123456 12345 status.cpp:100] msg". Doris BE uses
+        # it, as does anything built on glog. No word-based regex can reach it,
+        # so it gets its own route rather than another alternative in the text
+        # pattern. Set enabled=false if a workload's logs start with a capital
+        # I/W/E/F followed by four digits and a space and are NOT glog.
+        enabled: true
+        detectRegex: '^[IWEF]\d{4} '
+        severityRegex: '^(?P<severity>[IWEF])\d{4} '
+        severityMapping:
+          info: [i]
+          warn: [w]
+          error: [e]
+          fatal: [f]
       json:
         # Field holding the level in a JSON log (logback/zap/winston/pino).
         severityField: level
@@ -140,19 +158,35 @@ agent:
         # by a space — so a `^\S+\s+LEVEL` anchor never reaches the level. The
         # {0,48} window keeps the level near the line start, so a message merely
         # CONTAINING "error" further along is not misread as ERROR severity.
-        # Longer alternatives precede their abbreviations (INFO before INF).
+        # Longer alternatives precede their abbreviations, since the engine takes
+        # the first that matches (INFORMATION before INFO before INF).
+        #
+        # Each alternative carries its own trailing \b — a shared one cannot work
+        # for `LOG:`, where the boundary would fall between ':' and a space (two
+        # non-word chars, so no boundary exists and the match fails).
+        #
+        # `LOG:` keeps its colon deliberately. Postgres' most common level is
+        # bare "LOG", which as a word is far too generic — it would tag any line
+        # merely mentioning a log file. The colon makes it Postgres-specific, at
+        # the cost of "LOG:" (with colon) as the severity TEXT; the mapping below
+        # still resolves it to a correct severity NUMBER, which is what filtering
+        # and alerting use.
+        #
         # Heuristic, not a guarantee: unmatched simply means no severity.
-        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE|DEBUG|INFO|INF|WARNING|WARN|WRN|ERROR|ERR|FATAL|CRITICAL|CRIT)\b'
-        # The full names are understood already; the abbreviations are not. Left
-        # unmapped, Serilog's "[09:00:03 INF]" yields severity text "INF" with
-        # SeverityNumber Unspecified(0) — captured but unusable.
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE\b|DEBUG[1-5]\b|DEBUG\b|DBG\b|INFORMATION\b|INFO\b|INF\b|NOTICE\b|NOTE\b|SYSTEM\b|WARNING\b|WARN\b|WRN\b|ERROR\b|ERR\b|CRITICAL\b|CRIT\b|FATAL\b|PANIC\b|LOG:)'
+        # The six OTel names are understood already; everything else is not and
+        # would yield SeverityNumber Unspecified(0) — captured but unusable.
+        #   inf/wrn/err/crit  Serilog
+        #   information/notice/test  ClickHouse (<Information>, <Notice>, <Test>)
+        #   note/system       MySQL ([Note], [System])
+        #   log:/panic/debug1-5  PostgreSQL
         severityMapping:
-          trace: [trc]
-          debug: [dbg]
-          info: [inf]
+          trace: [trc, test]
+          debug: [dbg, debug1, debug2, debug3, debug4, debug5]
+          info: [inf, information, notice, note, system, "log:"]
           warn: [wrn]
           error: [err]
-          fatal: [crit, critical]
+          fatal: [crit, critical, panic]
   # Tolerate everything by default. A DaemonSet that cannot schedule on a
   # tainted node produces no telemetry and no error — silent blindness.
   tolerations:
