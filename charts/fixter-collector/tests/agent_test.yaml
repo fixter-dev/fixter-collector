@@ -510,3 +510,36 @@ tests:
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "type: recombine"
+
+  - it: maps JSON trace context onto the log record so logs correlate to traces
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'trace:\s*\n\s*trace_id:\s*\n\s*parse_from: attributes\.trace_id'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'span_id:\s*\n\s*parse_from: attributes\.span_id'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'trace_flags:\s*\n\s*parse_from: attributes\.trace_flags'
+
+  - it: honours overridden JSON trace field names
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.json.traceIdField: traceId
+      agent.logs.parsing.json.spanIdField: spanId
+      agent.logs.parsing.json.traceFlagsField: traceFlags
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'parse_from: attributes\.traceId'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'parse_from: attributes\.spanId'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'parse_from: attributes\.traceFlags'

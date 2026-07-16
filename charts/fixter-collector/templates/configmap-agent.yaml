@@ -115,6 +115,13 @@ data:
                 {{ $level }}: {{ $value }}
                 {{- end }}
               {{- end }}
+            trace:
+              trace_id:
+                parse_from: attributes.{{ .json.traceIdField }}
+              span_id:
+                parse_from: attributes.{{ .json.spanIdField }}
+              trace_flags:
+                parse_from: attributes.{{ .json.traceFlagsField }}
           {{- if .glog.enabled }}
           - type: regex_parser
             id: glog-severity
