@@ -1,0 +1,32 @@
+# Run the Fixter collector alongside your app in Docker Compose. Your app sends
+# OTLP to the collector by service name; the collector forwards to Fixter.
+#
+#   FIXTER_API_KEY=<your-key> docker compose up
+#
+# Pin a specific collector version (there is no :latest tag); bump it as new
+# versions are published.
+services:
+  fixter-collector:
+    image: ghcr.io/fixter-dev/fixter-collector:0.1.1
+    command: ["--config=file:/etc/otel-config.yaml"]
+    environment:
+      FIXTER_API_KEY: ${FIXTER_API_KEY:?set FIXTER_API_KEY to your Fixter ingest key}
+      FIXTER_ENDPOINT: ${FIXTER_ENDPOINT:-https://ingest.fixter.dev}
+    volumes:
+      - ./otel-config.yaml:/etc/otel-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+  # Example app. Point your own service at the collector the same way:
+  #   OTEL_EXPORTER_OTLP_ENDPOINT=http://fixter-collector:4318
+  #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+  #
+  # app:
+  #   image: your-app
+  #   environment:
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: http://fixter-collector:4318
+  #     OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  #     OTEL_SERVICE_NAME: your-app
+  #   depends_on:
+  #     - fixter-collector
