@@ -184,14 +184,23 @@ tests:
   # A source_identifier is not cosmetic: without it recombine interleaves lines
   # from every pod on the node into one stream and stitches unrelated logs
   # together.
-  - it: recombines per log file so concurrent pods cannot interleave
+  #
+  # Keyed on path+STREAM, not path alone: CRI writes stdout and stderr
+  # interleaved into the same 0.log, so the path is not a stream. Verified
+  # against the real binary — with the path alone, a stderr traceback landed
+  # inside the preceding stdout INFO record and inherited Info(9), making the
+  # KeyError invisible to every severity>=ERROR filter.
+  - it: recombines per file AND stream so stderr cannot land inside a stdout record
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'source_identifier: attributes\["log.file.path"\]'
+          pattern: 'source_identifier: attributes\["recombine_source"\]'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'log.file.path"\] \+ "\|" \+ attributes\["log.iostream"\]'
 
   # The safety valve for the recombine failure mode: an app whose lines never
   # match firstEntryRegex would otherwise buffer forever into one giant entry.
@@ -383,16 +392,39 @@ tests:
           path: data["config.yaml"]
           pattern: "id: text-severity"
 
-  # ClickHouse stack frames are numbered ("0. DB::Exception... @ 0x...") rather
-  # than indented, so the universal leading-whitespace rule misses them.
-  - it: treats numbered stack frames as continuations for ClickHouse
+  # `\d+\.\s` would catch ClickHouse's numbered frames, but it also swallowed
+  # "1. Check that the database is reachable" and every line of a locale-formatted
+  # JVM log ("2026. 7. 16." under ko_KR, which glued each message to the NEXT
+  # record's header). Swallowing a real log line is worse than splitting a trace,
+  # so ClickHouse frames are left to split. Same reasoning killed `at\s`, which
+  # swallowed "at capacity, rejecting request".
+  - it: does not swallow numbered or at-prefixed lines that are real log records
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
     asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*\\\\d\+\\\\\.\\\\s'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*\|at\\\\s\|'
+
+  # panic: is the HEAD of a Go panic, not a continuation. Listed as one, it merged
+  # the crash BACKWARDS into the preceding line and reported the whole thing at
+  # that line's severity — a Go crash arriving as Info(9). Omitted, it starts its
+  # own record (Fatal(21)) and `goroutine \d` attaches the dump.
+  - it: "does not treat panic: as a continuation, so a Go crash is not merged backwards"
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*\|panic:\|'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: '\\\\d\+\\\\\.\\\\s'
+          pattern: 'goroutine \\\\d'
 
   # A Go stack frame's function line sits UNINDENTED between the indented
   # file:line rows, so the whitespace rule misses it and panics fragment. Every

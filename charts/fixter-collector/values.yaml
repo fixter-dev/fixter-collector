@@ -110,23 +110,26 @@ agent:
       # format degrades to one-record-per-line, which is merely the status quo.
       # Splitting a record is recoverable; merging unrelated events is not.
       #
-      # Covers indented frames (universal: Java `\tat`, Python `  File`, Go
-      # `\t/app/x.go:10`, C# `   at`, JS `    at`) plus the unindented lines that
-      # are unambiguously part of a trace. `\d+\.\s` is ClickHouse, whose stack
-      # frames are numbered ("0. DB::Exception::Exception(...) @ 0x... in ...")
-      # and start with a digit rather than an indent. Its own log lines are not
-      # caught by it: "2026.07.16 09:00:00" has no space after the first dot.
+      # Every entry here is a globbing risk: a pattern that matches a real log
+      # line appends it to the record above, and merging unrelated events is the
+      # worst failure this config can produce. Keep them narrow, and prefer
+      # missing a continuation over swallowing a record.
       #
-      # `\S+\.\w+\([^)]*\)$` is a Go stack frame's function line
-      # ("k8s.io/apimachinery/pkg/util/runtime.logPanic(0x1, 0x2)"), which sits
-      # UNINDENTED between the indented file:line rows — every Kubernetes
-      # controller is Go, so its panics fragment without this. Anchored to a
-      # closing paren at end-of-line so an ordinary message that merely opens
-      # with a call ("Reconciler.Run(ctx) failed") is not swallowed.
+      # `^\s` (indented) is the universal case and carries nearly all of it:
+      # Java `\tat`, Python `  File`, Go `\t/app/x.go:10`, C# `   at`, JS `    at`.
       #
-      # Every addition here is a globbing risk — a pattern that matches a real
-      # log line appends it to the record above. Keep them narrow.
-      continuationRegex: '^(\s|\d+\.\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|created by \S|\S+\.\w+\([^)]*\)$|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
+      # Deliberately NOT here, each verified to swallow ordinary lines:
+      #   at\s      — "at capacity, rejecting request". Indented `at` frames are
+      #               already covered by ^\s; the unindented form is not worth it.
+      #   \d+\.\s   — "1. Check that the database is reachable", and any
+      #               locale-formatted JVM log ("2026. 7. 16." under ko_KR).
+      #               Cost: ClickHouse's numbered frames split. Accepted — a split
+      #               trace is recoverable, a swallowed log line is not.
+      #   panic:    — this is the HEAD of a Go panic, not a continuation. Listing
+      #               it merged the crash backwards into the preceding line and
+      #               reported it at that line's severity (an INFO). Omitted, it
+      #               starts its own record and `goroutine \d` attaches the rest.
+      continuationRegex: '^(\s|Caused by:|\.\.\.\s\d+\smore|Traceback \(most recent call last\):|goroutine \d|\[signal |created by \S|\S+\.\w+\([^)]*\)$|\w+(\.\w+)+(Exception|Error)([:\s]|$))'
       # Bounds the buffer: flush a held-open record after this long with no new
       # line, and never let one grow past this size.
       forceFlushPeriod: 5s

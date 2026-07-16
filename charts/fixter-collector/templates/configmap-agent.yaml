@@ -60,6 +60,16 @@ data:
             id: container-parser
           {{- with .Values.agent.logs.parsing }}
           {{- if .enabled }}
+          # CRI writes stdout AND stderr interleaved into the SAME 0.log, so the
+          # file path alone is not a stream: a stderr stack trace lands inside
+          # whatever stdout line happened to precede it, inheriting its severity.
+          # An ERROR then hides inside an INFO record, invisible to every
+          # severity>=ERROR filter and alert. Key the recombine on path+stream so
+          # the two never interleave.
+          - type: add
+            id: recombine-key
+            field: attributes.recombine_source
+            value: 'EXPR(attributes["log.file.path"] + "|" + attributes["log.iostream"])'
           # Join continuation lines into the record above. source_identifier is
           # not cosmetic: without it every pod on the node shares one stream and
           # unrelated logs get stitched together.
@@ -76,7 +86,7 @@ data:
             # then the regex engine's). Without this the collector refuses to start:
             # "failed to compile is_first_entry: invalid char escape".
             is_first_entry: '!(body matches "{{ .continuationRegex | replace "\\" "\\\\" }}")'
-            source_identifier: attributes["log.file.path"]
+            source_identifier: attributes["recombine_source"]
             max_log_size: {{ .maxLogSize }}
             force_flush_period: {{ .forceFlushPeriod }}
           - type: router
