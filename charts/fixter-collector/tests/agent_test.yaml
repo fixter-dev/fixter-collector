@@ -75,6 +75,37 @@ tests:
           path: data["config.yaml"]
           pattern: "traces:\\s*\\n\\s*receivers: \\[otlp\\]"
 
+  - it: derives the service identity triad from k8s attributes for pod logs and metrics
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.enabled: true
+      agent.otlpRelay: true
+    asserts:
+      # The derive-service processor copies from the k8s attributes k8s_attributes
+      # already extracts, with a deployment -> container fallback for service.name.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "resource/derive_service:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "from_attribute: k8s.deployment.name"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "key: service.namespace"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "key: service.instance.id"
+      # It runs in BOTH the logs and metrics pipelines (self-scoping insert: infra
+      # metrics with no deployment just no-op through it).
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "processors: \\[memory_limiter, k8s_attributes, resource_detection, resource, resource/derive_service, batch\\]"
+      # Traces keep the original list — relayed traces always carry their own service.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "traces:\\s*\\n\\s*receivers: \\[otlp\\]\\s*\\n\\s*processors: \\[memory_limiter, k8s_attributes, resource_detection, resource, batch\\]"
+
   - it: honours excludeNamespaces
     template: configmap-agent.yaml
     set:

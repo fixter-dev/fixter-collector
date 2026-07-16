@@ -8,13 +8,14 @@ metrics and pod logs, relays your apps' OTLP, and ships it all to Fixter.
 ```bash
 helm install fixter-collector \
   oci://ghcr.io/fixter-dev/charts/fixter-collector \
-  --version 0.1.0 \
   --namespace fixter --create-namespace \
   --set fixter.apiKey=<your-key>
 ```
 
 That's it — `fixter.apiKey` is the only required value. `fixter.endpoint`
-already defaults to `https://ingest.fixter.dev`.
+already defaults to `https://ingest.fixter.dev`. Without `--version` this pulls
+the latest published chart; pin one with `--version <x.y.z>` for reproducible
+deploys.
 
 Get a key at https://fixter.dev → Settings → API Keys.
 
@@ -58,6 +59,19 @@ than adding availability.
 
 The agent tolerates all taints by default, so tainted nodes are not silently
 skipped.
+
+## Service attribution
+
+Fixter groups every signal by service, but pod logs (read from files) and
+kubelet/pod metrics carry no `service.name` of their own. The agent fills the
+service-identity triad — `service.name` (from the k8s deployment, falling back to
+the container name), `service.namespace` (from the k8s namespace), and
+`service.instance.id` (from the pod name) — on pod logs and metrics, using the
+Kubernetes metadata it already attaches.
+
+This only ever *fills a missing* value: telemetry your apps relay through the
+agent keeps the `service.name` they set, and node/host metrics with no owning
+deployment stay serviceless (as infra metrics should).
 
 ## Sending app telemetry
 
@@ -113,16 +127,25 @@ integrations:
 
 ## Security
 
-- Both collectors (`agent` and `cluster`) run as a hardened, non-root
-  container by default: `runAsNonRoot: true`, `runAsUser`/`runAsGroup: 10001`,
-  `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and all
-  Linux capabilities dropped.
+- The **`cluster`** collector runs fully hardened and non-root:
+  `runAsNonRoot: true`, `runAsUser`/`runAsGroup: 10001`,
+  `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`,
+  `seccompProfile: RuntimeDefault`, and all Linux capabilities dropped.
+- The **`agent`** runs as **root** (`runAsUser: 0`, `runAsNonRoot: false`) by
+  necessity: `/var/log/pods` on EKS and most containerd distros is root-owned,
+  so a non-root agent silently reads **nothing** — `file_log` starts, opens no
+  file, logs no error, and the pod stays Ready while collecting zero logs. Every
+  log-collecting DaemonSet (Fluent Bit, Datadog, Vector) runs as root for the
+  same reason. The agent is still hardened at the container level:
+  `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`,
+  `seccompProfile: RuntimeDefault`, all capabilities dropped.
 - The agent mounts `/var/log/pods` and the host root filesystem (`/`) via
   `hostPath`, both **read-only**, to collect pod logs and host-level metrics.
   This is inherent to node-level collection and is not configurable away.
 - A `restricted` Pod Security Admission namespace will reject the agent
-  DaemonSet because of those hostPath mounts. Install into a namespace that
-  permits it — `--create-namespace` above gives you a plain one.
+  DaemonSet — both for the hostPath mounts and because it runs as root. Install
+  into a namespace that permits it — `--create-namespace` above gives you a
+  plain one.
 - Both the agent and cluster collector tolerate all taints by default, so
   tainted nodes/singletons aren't silently skipped.
 
