@@ -125,7 +125,9 @@ Verified against real output from these formats:
 | Go (logrus text, logfmt) | yes | yes |
 | Go (`log` stdlib) | yes | no level in the line to find |
 | .NET (default console, Serilog) | yes | yes |
-| glog — Doris BE, and anything glog-based | yes | yes |
+| glog / klog — Doris BE, Kubernetes components | yes | yes |
+| CoreDNS (`[INFO]`, `[ERROR]`) | yes | yes |
+| Go panics / Kubernetes controller stacks | yes | yes |
 | PostgreSQL (`LOG:`, `ERROR:`, `FATAL:`, …) | yes | yes |
 | MySQL (`[System]`, `[Note]`, `[Warning]`, `[ERROR]`) | yes | yes |
 | Doris FE (log4j) | yes | yes |
@@ -160,6 +162,30 @@ than widening the regex.
 There is no AWS log support because there is nothing to support: the distro
 builds no AWS receivers (`filelog`, `hostmetrics`, `k8scluster`, `kubeletstats`,
 `otlp`, `prometheus`).
+
+### What "Kubernetes logs" actually reaches you
+
+The parsing above handles klog, but on EKS most Kubernetes logs are not pod logs
+at all, so the agent never sees them:
+
+| Source | Where its logs go | Reachable? |
+| --- | --- | --- |
+| Control plane (apiserver, etcd, scheduler, controller-manager) | CloudWatch — AWS-managed, not pods | **no** — needs an AWS receiver this distro does not build |
+| kubelet, containerd | journald on the node | **no** — needs a journald receiver this distro does not build |
+| kube-system pods (CoreDNS, aws-node, Karpenter, external-dns, EBS CSI, LB controller) | `/var/log/pods` | yes — but **excluded by default** |
+
+Only the third class is available, and `excludeNamespaces` drops it by default
+for volume. To collect it, remove `kube-system` from the list:
+
+```yaml
+agent:
+  logs:
+    excludeNamespaces: []
+```
+
+Karpenter and external-dns are the ones usually worth having: they explain node
+provisioning and DNS changes, which is exactly what you want when scheduling
+misbehaves.
 
 Note the direction: the pattern describes a **continuation**, not a record
 start. That is deliberate. With the inverse, any format the pattern doesn't

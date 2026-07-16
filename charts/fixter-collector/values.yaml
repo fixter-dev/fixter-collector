@@ -116,7 +116,17 @@ agent:
       # frames are numbered ("0. DB::Exception::Exception(...) @ 0x... in ...")
       # and start with a digit rather than an indent. Its own log lines are not
       # caught by it: "2026.07.16 09:00:00" has no space after the first dot.
-      continuationRegex: '^(\s|\d+\.\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
+      #
+      # `\S+\.\w+\([^)]*\)$` is a Go stack frame's function line
+      # ("k8s.io/apimachinery/pkg/util/runtime.logPanic(0x1, 0x2)"), which sits
+      # UNINDENTED between the indented file:line rows — every Kubernetes
+      # controller is Go, so its panics fragment without this. Anchored to a
+      # closing paren at end-of-line so an ordinary message that merely opens
+      # with a call ("Reconciler.Run(ctx) failed") is not swallowed.
+      #
+      # Every addition here is a globbing risk — a pattern that matches a real
+      # log line appends it to the record above. Keep them narrow.
+      continuationRegex: '^(\s|\d+\.\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|created by \S|\S+\.\w+\([^)]*\)$|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
       # Bounds the buffer: flush a held-open record after this long with no new
       # line, and never let one grow past this size.
       forceFlushPeriod: 5s

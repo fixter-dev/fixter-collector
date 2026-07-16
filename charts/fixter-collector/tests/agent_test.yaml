@@ -394,6 +394,23 @@ tests:
           path: data["config.yaml"]
           pattern: '\\\\d\+\\\\\.\\\\s'
 
+  # A Go stack frame's function line sits UNINDENTED between the indented
+  # file:line rows, so the whitespace rule misses it and panics fragment. Every
+  # Kubernetes controller is Go, so this is the common multi-line case in-cluster.
+  # Anchored to a closing paren at end-of-line so an ordinary message that merely
+  # opens with a call ("Reconciler.Run(ctx) failed") is not swallowed.
+  - it: treats Go stack frame function lines as continuations
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'created by \\\\S'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\\\\S\+\\\\\.\\\\w\+\\\\\(\[\^\)\]\*\\\\\)\$'
+
   - it: recognises database level words in the text severity pattern
     template: configmap-agent.yaml
     set:
