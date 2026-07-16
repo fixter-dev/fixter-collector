@@ -154,16 +154,8 @@ agent:
       json:
         # Field holding the level in a JSON log (logback/zap/winston/pino).
         severityField: level
-        # Fields holding W3C trace context in a JSON log. These default to the MDC keys the
-        # OpenTelemetry Java agent injects (trace_id/span_id/trace_flags); Python's
-        # opentelemetry-instrumentation-logging and .NET's OTel logging use the same names.
-        #
-        # Without this mapping a JSON trace_id is parsed into an ATTRIBUTE and the record's own
-        # TraceId stays empty — so Fixter stores no trace_id and logs never correlate to traces.
-        # A log line that already carries trace context but arrives uncorrelated is the failure
-        # this prevents; it is invisible until someone clicks a log and gets no trace.
-        #
-        # Missing fields are not an error: the trace parser is best-effort like the severity one.
+        # Trace context in a JSON log; defaults are the OTel agent's MDC keys. Without this the
+        # record's own TraceId stays empty and logs never correlate to traces.
         traceIdField: trace_id
         spanIdField: span_id
         traceFlagsField: trace_flags
