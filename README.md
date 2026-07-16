@@ -106,6 +106,107 @@ Or disable pod log collection entirely:
 --set agent.logs.enabled=false
 ```
 
+## Log severity and stack traces
+
+Pod log lines carry no severity, and a stack trace arrives as one line per
+frame. The agent derives both: JSON bodies take their level from the `level`
+field (string *or* numeric, so pino and bunyan work); anything else falls back
+to a regex over the text. Stack frames and other continuation lines are joined
+onto the record above.
+
+Verified against real output from these formats:
+
+| Format | Record boundaries | Severity |
+| --- | --- | --- |
+| JSON, string level (zap, winston, logback) | yes | yes |
+| JSON, numeric level (pino, bunyan) | yes | yes |
+| Java / Spring (logback default) | yes | yes |
+| Python (`logging` default) | yes | yes |
+| Go (logrus text, logfmt) | yes | yes |
+| Go (`log` stdlib) | yes | no level in the line to find |
+| .NET (default console, Serilog) | yes | yes |
+| glog / klog — Doris BE, Kubernetes components | yes | yes |
+| CoreDNS (`[INFO]`, `[ERROR]`) | yes | yes |
+| Go panics / Kubernetes controller stacks | yes | yes |
+| PostgreSQL (`LOG:`, `ERROR:`, `FATAL:`, …) | yes | yes |
+| MySQL (`[System]`, `[Note]`, `[Warning]`, `[ERROR]`) | yes | yes |
+| Doris FE (log4j) | yes | yes |
+| ClickHouse (`<Information>`, `<Error>`, … + numbered stack frames) | yes | yes |
+
+Both paths are best-effort. A format neither recognises still ships — it just
+arrives without a severity. **Nothing is ever dropped for being unparseable.**
+
+### Tuning it
+
+```yaml
+agent:
+  logs:
+    parsing:
+      # A line matching this CONTINUES the record above; anything else starts a
+      # new one. Covers indented frames plus `Caused by:`, `at `, tracebacks,
+      # `panic:`, and exception-class lines.
+      continuationRegex: '^(\s|Caused by:|at\s|panic:|...)'
+      json:
+        severityField: level      # e.g. severity_text, levelname
+      text:
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE\b|DEBUG\b|INFO\b|...)'
+      glog:
+        enabled: true             # Doris BE and other glog users ("I0716 ...")
+```
+
+Levels that are not one of the six OTel names — Serilog's `INF`, ClickHouse's
+`<Information>`, MySQL's `[Note]`, Postgres' `LOG:`, pino's numeric `30` — are
+resolved through `severityMapping` under each path. Add your own there rather
+than widening the regex.
+
+There is no AWS log support because there is nothing to support: the distro
+builds no AWS receivers (`filelog`, `hostmetrics`, `k8scluster`, `kubeletstats`,
+`otlp`, `prometheus`).
+
+### What "Kubernetes logs" actually reaches you
+
+The parsing above handles klog, but on EKS most Kubernetes logs are not pod logs
+at all, so the agent never sees them:
+
+| Source | Where its logs go | Reachable? |
+| --- | --- | --- |
+| Control plane (apiserver, etcd, scheduler, controller-manager) | CloudWatch — AWS-managed, not pods | **no** — needs an AWS receiver this distro does not build |
+| kubelet, containerd | journald on the node | **no** — needs a journald receiver this distro does not build |
+| kube-system pods (CoreDNS, aws-node, Karpenter, external-dns, EBS CSI, LB controller) | `/var/log/pods` | yes — but **excluded by default** |
+
+Only the third class is available, and `excludeNamespaces` drops it by default
+for volume. To collect it, remove `kube-system` from the list:
+
+```yaml
+agent:
+  logs:
+    excludeNamespaces: []
+```
+
+Karpenter and external-dns are the ones usually worth having: they explain node
+provisioning and DNS changes, which is exactly what you want when scheduling
+misbehaves.
+
+Note the direction: the pattern describes a **continuation**, not a record
+start. That is deliberate. With the inverse, any format the pattern doesn't
+recognise has *every* line treated as a continuation, and unrelated log events
+get merged into one record. Detecting continuations fails the safe way — an
+unknown format degrades to one-record-per-line, which is just the status quo.
+Splitting a record is recoverable; merging unrelated events is not.
+
+`forceFlushPeriod` (5s) and `maxLogSize` (1MiB) bound how long a record can be
+held open.
+
+The text severity regex is a heuristic: it looks for a level word within the
+first 48 characters, so a message merely *containing* "error" further along
+isn't misread. It can still be fooled — set your own pattern if that matters.
+
+Or leave logs raw and unparsed:
+
+```bash
+--set agent.logs.parsing.enabled=false
+```
+
 ## Bring your own Secret
 
 ```bash

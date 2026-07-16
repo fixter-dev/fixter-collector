@@ -89,6 +89,122 @@ agent:
     excludeNamespaces:
       - kube-system
     excludePods: []
+    # The container operator only unwraps the CRI envelope — it never reads the
+    # application's own line. Without the operators these values drive, every log
+    # arrives with no severity and each stack-trace line becomes its own record.
+    #
+    # JSON bodies are parsed as JSON; everything else falls back to a regex over
+    # the text. Both paths are best-effort: a format neither recognises still
+    # ships, just without a severity.
+    parsing:
+      enabled: true
+      # A line matching this CONTINUES the record above (stack frames, wrapped
+      # messages); anything else starts a new record.
+      #
+      # This detects continuations rather than record-starts, and that direction
+      # matters. The inverse ("a line matching X starts a record") appends every
+      # non-matching line to the record above — so a format the pattern does not
+      # know (Go's `time=...`/`2026/07/16`, .NET's `info:`) has EVERY line
+      # treated as a continuation and unrelated log events get merged into one
+      # record. Detecting continuations fails the safe way instead: an unknown
+      # format degrades to one-record-per-line, which is merely the status quo.
+      # Splitting a record is recoverable; merging unrelated events is not.
+      #
+      # Every entry here is a globbing risk: a pattern that matches a real log
+      # line appends it to the record above, and merging unrelated events is the
+      # worst failure this config can produce. Keep them narrow, and prefer
+      # missing a continuation over swallowing a record.
+      #
+      # `^\s` (indented) is the universal case and carries nearly all of it:
+      # Java `\tat`, Python `  File`, Go `\t/app/x.go:10`, C# `   at`, JS `    at`.
+      #
+      # Deliberately NOT here, each verified to swallow ordinary lines:
+      #   at\s      — "at capacity, rejecting request". Indented `at` frames are
+      #               already covered by ^\s; the unindented form is not worth it.
+      #   \d+\.\s   — "1. Check that the database is reachable", and any
+      #               locale-formatted JVM log ("2026. 7. 16." under ko_KR).
+      #               Cost: ClickHouse's numbered frames split. Accepted — a split
+      #               trace is recoverable, a swallowed log line is not.
+      #   panic:    — this is the HEAD of a Go panic, not a continuation. Listing
+      #               it merged the crash backwards into the preceding line and
+      #               reported it at that line's severity (an INFO). Omitted, it
+      #               starts its own record and `goroutine \d` attaches the rest.
+      continuationRegex: '^(\s|Caused by:|\.\.\.\s\d+\smore|Traceback \(most recent call last\):|goroutine \d|\[signal |created by \S|\S+\.\w+\([^)]*\)$|\w+(\.\w+)+(Exception|Error)([:\s]|$))'
+      # Bounds the buffer: flush a held-open record after this long with no new
+      # line, and never let one grow past this size.
+      forceFlushPeriod: 5s
+      # Keep the unit suffix: a bare 1048576 renders through Helm as the float
+      # 1.048576e+06, which is legal but unreadable in a shipped config.
+      maxLogSize: 1MiB
+      glog:
+        # glog encodes severity as a single leading letter (I/W/E/F) followed by
+        # MMDD — "I0716 09:00:00.123456 12345 status.cpp:100] msg". Doris BE uses
+        # it, as does anything built on glog. No word-based regex can reach it,
+        # so it gets its own route rather than another alternative in the text
+        # pattern. Set enabled=false if a workload's logs start with a capital
+        # I/W/E/F followed by four digits and a space and are NOT glog.
+        enabled: true
+        detectRegex: '^[IWEF]\d{4} '
+        severityRegex: '^(?P<severity>[IWEF])\d{4} '
+        severityMapping:
+          info: [i]
+          warn: [w]
+          error: [e]
+          fatal: [f]
+      json:
+        # Field holding the level in a JSON log (logback/zap/winston/pino).
+        severityField: level
+        # Trace context in a JSON log; defaults are the OTel agent's MDC keys. Without this the
+        # record's own TraceId stays empty and logs never correlate to traces.
+        traceIdField: trace_id
+        spanIdField: span_id
+        traceFlagsField: trace_flags
+        # pino and bunyan emit NUMERIC levels; without a mapping they arrive as
+        # severity text "30" with SeverityNumber Unspecified(0) — parsed but
+        # useless. String levels ("info") are understood without any mapping, so
+        # this only adds the numeric case.
+        severityMapping:
+          trace: 10
+          debug: 20
+          info: 30
+          warn: 40
+          error: 50
+          fatal: 60
+      text:
+        # Case-insensitive, and NOT anchored to an ISO timestamp: Python's
+        # default asctime is "2026-07-16 09:00:02,124" — date and time separated
+        # by a space — so a `^\S+\s+LEVEL` anchor never reaches the level. The
+        # {0,48} window keeps the level near the line start, so a message merely
+        # CONTAINING "error" further along is not misread as ERROR severity.
+        # Longer alternatives precede their abbreviations, since the engine takes
+        # the first that matches (INFORMATION before INFO before INF).
+        #
+        # Each alternative carries its own trailing \b — a shared one cannot work
+        # for `LOG:`, where the boundary would fall between ':' and a space (two
+        # non-word chars, so no boundary exists and the match fails).
+        #
+        # `LOG:` keeps its colon deliberately. Postgres' most common level is
+        # bare "LOG", which as a word is far too generic — it would tag any line
+        # merely mentioning a log file. The colon makes it Postgres-specific, at
+        # the cost of "LOG:" (with colon) as the severity TEXT; the mapping below
+        # still resolves it to a correct severity NUMBER, which is what filtering
+        # and alerting use.
+        #
+        # Heuristic, not a guarantee: unmatched simply means no severity.
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE\b|DEBUG[1-5]\b|DEBUG\b|DBG\b|INFORMATION\b|INFO\b|INF\b|NOTICE\b|NOTE\b|SYSTEM\b|WARNING\b|WARN\b|WRN\b|ERROR\b|ERR\b|CRITICAL\b|CRIT\b|FATAL\b|PANIC\b|LOG:)'
+        # The six OTel names are understood already; everything else is not and
+        # would yield SeverityNumber Unspecified(0) — captured but unusable.
+        #   inf/wrn/err/crit  Serilog
+        #   information/notice/test  ClickHouse (<Information>, <Notice>, <Test>)
+        #   note/system       MySQL ([Note], [System])
+        #   log:/panic/debug1-5  PostgreSQL
+        severityMapping:
+          trace: [trc, test]
+          debug: [dbg, debug1, debug2, debug3, debug4, debug5]
+          info: [inf, information, notice, note, system, "log:"]
+          warn: [wrn]
+          error: [err]
+          fatal: [crit, critical, panic]
   # Tolerate everything by default. A DaemonSet that cannot schedule on a
   # tainted node produces no telemetry and no error — silent blindness.
   tolerations:
