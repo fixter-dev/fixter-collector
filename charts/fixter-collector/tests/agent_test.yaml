@@ -164,3 +164,162 @@ tests:
       - equal:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: false
+
+  # ── log parsing: severity + multiline ──────────────────────────────────────
+  # The container operator only unwraps the CRI envelope; it never looks at the
+  # application's own line. Without the operators below, every log arrives with
+  # no severity and each stack-trace line becomes its own record.
+  - it: joins continuation lines so a stack trace is one record, not one per line
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: recombine"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "combine_field: body"
+
+  # A source_identifier is not cosmetic: without it recombine interleaves lines
+  # from every pod on the node into one stream and stitches unrelated logs
+  # together.
+  - it: recombines per log file so concurrent pods cannot interleave
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'source_identifier: attributes\["log.file.path"\]'
+
+  # The safety valve for the recombine failure mode: an app whose lines never
+  # match firstEntryRegex would otherwise buffer forever into one giant entry.
+  - it: bounds recombine so an unmatched format cannot buffer forever
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "force_flush_period: 5s"
+      # Assert the VALUE, not just the key: a bare integer here renders through
+      # Helm as the float 1.048576e+06.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "max_log_size: 1MiB"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "max_log_size: [0-9.]+e\\+"
+
+  - it: routes JSON bodies to the json parser and takes severity from the level field
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: router"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: json_parser"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "parse_from: attributes.level"
+
+  - it: falls back to a text severity regex for non-JSON logs
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: regex_parser"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "ERROR"
+
+  # A parser that hard-fails drops the log. An unrecognised format must degrade
+  # to "no severity", never to "no log".
+  - it: never drops a log whose format neither parser recognises
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "on_error: send_quiet"
+
+  - it: lets an operator override the first-entry pattern for its own log format
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.firstEntryRegex: "^CUSTOM-START"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "CUSTOM-START"
+
+  # Regression: is_first_entry is an expr expression, so the pattern sits inside
+  # a string literal and each backslash must survive expr's unescape before the
+  # regex engine sees it. Emitting the raw pattern renders `\{`, which expr
+  # rejects at startup ("invalid char escape") — the collector then crashloops
+  # and the node ships NO logs at all. Caught only by running the rendered
+  # config; every string-presence assertion passed while it was broken.
+  - it: double-escapes the first-entry pattern so expr can compile it
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: .body matches "\^\(\\\\\{'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: .body matches "\^\([^\\]\\\{'
+
+  - it: double-escapes an operator's custom pattern too
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.firstEntryRegex: '^\d{2}:\d{2}'
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: .body matches "\^\\\\d\{2\}:\\\\d\{2\}"'
+
+  - it: lets an operator override the JSON severity field
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.json.severityField: severity_text
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "parse_from: attributes.severity_text"
+
+  - it: can be turned off entirely, leaving only the container parser
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "type: recombine"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "type: router"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: container"
+
+  - it: does not emit parsing operators when logs are disabled
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "type: recombine"

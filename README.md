@@ -106,6 +106,43 @@ Or disable pod log collection entirely:
 --set agent.logs.enabled=false
 ```
 
+## Log severity and stack traces
+
+Pod log lines carry no severity, and a stack trace arrives as one line per
+frame. The agent derives both: JSON bodies are parsed as JSON and take their
+level from the `level` field; anything else falls back to a regex over the
+text. Lines that don't start a new record (stack frames, wrapped messages) are
+joined onto the record above.
+
+Both paths are best-effort — a format neither recognises still ships, just
+without a severity. Nothing is ever dropped for being unparseable.
+
+If your logs use a different shape, point the patterns at it:
+
+```yaml
+agent:
+  logs:
+    parsing:
+      # A line matching this starts a NEW record; anything else is appended to
+      # the record above.
+      firstEntryRegex: '^(\{|\[|\d{4}-\d{2}-\d{2})'
+      json:
+        severityField: level          # e.g. severity_text, levelname
+      text:
+        severityRegex: '^\S+\s+(?P<severity>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
+```
+
+If your app's lines start with none of `firstEntryRegex`'s alternatives, every
+line would be appended to one record — give it a pattern that matches your
+format. `forceFlushPeriod` (5s) and `maxLogSize` (1MiB) bound that case rather
+than fix it.
+
+Or leave logs raw and unparsed:
+
+```bash
+--set agent.logs.parsing.enabled=false
+```
+
 ## Bring your own Secret
 
 ```bash

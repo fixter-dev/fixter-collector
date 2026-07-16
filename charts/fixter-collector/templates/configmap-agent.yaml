@@ -58,6 +58,54 @@ data:
         operators:
           - type: container
             id: container-parser
+          {{- with .Values.agent.logs.parsing }}
+          {{- if .enabled }}
+          # Join continuation lines into the record above. source_identifier is
+          # not cosmetic: without it every pod on the node shares one stream and
+          # unrelated logs get stitched together.
+          - type: recombine
+            id: multiline
+            combine_field: body
+            combine_with: "\n"
+            # is_first_entry is an expr expression, so the pattern lands inside a
+            # string literal and every backslash must survive TWO unescapes (expr's,
+            # then the regex engine's). Without this the collector refuses to start:
+            # "failed to compile is_first_entry: invalid char escape".
+            is_first_entry: 'body matches "{{ .firstEntryRegex | replace "\\" "\\\\" }}"'
+            source_identifier: attributes["log.file.path"]
+            max_log_size: {{ .maxLogSize }}
+            force_flush_period: {{ .forceFlushPeriod }}
+          - type: router
+            id: format-router
+            routes:
+              - expr: 'body matches "^\\s*\\{"'
+                output: json-severity
+            default: text-severity
+          # Both parsers are send_quiet on error: an unrecognised format must
+          # degrade to "no severity", never to "no log".
+          - type: json_parser
+            id: json-severity
+            parse_from: body
+            parse_to: attributes
+            on_error: send_quiet
+            output: parsed
+            severity:
+              parse_from: attributes.{{ .json.severityField }}
+          - type: regex_parser
+            id: text-severity
+            parse_from: body
+            regex: '{{ .text.severityRegex }}'
+            parse_to: attributes
+            on_error: send_quiet
+            output: parsed
+            severity:
+              parse_from: attributes.severity
+          # Both routes converge here; without it json-severity would fall
+          # through to text-severity and re-parse its own output.
+          - type: noop
+            id: parsed
+          {{- end }}
+          {{- end }}
       {{- end }}
     processors:
       memory_limiter:

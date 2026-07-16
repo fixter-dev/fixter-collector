@@ -89,6 +89,36 @@ agent:
     excludeNamespaces:
       - kube-system
     excludePods: []
+    # The container operator only unwraps the CRI envelope — it never reads the
+    # application's own line. Without the operators these values drive, every log
+    # arrives with no severity and each stack-trace line becomes its own record.
+    #
+    # JSON bodies are parsed as JSON; everything else falls back to a regex over
+    # the text. Both paths are best-effort: a format neither recognises still
+    # ships, just without a severity.
+    parsing:
+      enabled: true
+      # A line matching this starts a NEW record; anything else is appended to
+      # the record above (stack traces, wrapped messages). The default covers
+      # JSON, bracketed, and leading-ISO-date formats.
+      #
+      # Formats whose lines start with none of these (e.g. a bare "starting...")
+      # would append EVERY line to one record — maxLogSize and forceFlushPeriod
+      # bound that, but such a format wants its own pattern here.
+      firstEntryRegex: '^(\{|\[|\d{4}-\d{2}-\d{2})'
+      # Safety valves for the case above: flush a buffered record after this long
+      # with no new line, and never let one grow past this many bytes.
+      forceFlushPeriod: 5s
+      # Keep the unit suffix: a bare 1048576 renders through Helm as the float
+      # 1.048576e+06, which is legal but unreadable in a shipped config.
+      maxLogSize: 1MiB
+      json:
+        # Field holding the level in a JSON log (logback/pino/zap: "level").
+        severityField: level
+      text:
+        # Anchored at the start so a message merely CONTAINING the word "error"
+        # is not misread as ERROR severity — the level must follow the timestamp.
+        severityRegex: '^\S+\s+(?P<severity>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
   # Tolerate everything by default. A DaemonSet that cannot schedule on a
   # tainted node produces no telemetry and no error — silent blindness.
   tolerations:
