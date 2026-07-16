@@ -1,0 +1,46 @@
+# Minimal standalone fixter-collector config for Docker Compose.
+#
+# Receives OTLP from your app containers and forwards it to Fixter over
+# authenticated OTLP/HTTP. This is the relay the chart runs on Kubernetes,
+# reduced to what a Compose stack needs — no k8s metrics, no pod-log scraping.
+#
+# Component keys are the distro's own (otlp_http, bearertokenauth); confirm with
+#   docker run --rm ghcr.io/fixter-dev/fixter-collector:<ver> components
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+extensions:
+  bearertokenauth:
+    scheme: Bearer
+    token: ${env:FIXTER_API_KEY}
+
+processors:
+  batch:
+    timeout: 10s
+
+exporters:
+  otlp_http:
+    endpoint: ${env:FIXTER_ENDPOINT}
+    auth:
+      authenticator: bearertokenauth
+
+service:
+  extensions: [bearertokenauth]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
