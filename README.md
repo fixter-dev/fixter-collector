@@ -109,33 +109,55 @@ Or disable pod log collection entirely:
 ## Log severity and stack traces
 
 Pod log lines carry no severity, and a stack trace arrives as one line per
-frame. The agent derives both: JSON bodies are parsed as JSON and take their
-level from the `level` field; anything else falls back to a regex over the
-text. Lines that don't start a new record (stack frames, wrapped messages) are
-joined onto the record above.
+frame. The agent derives both: JSON bodies take their level from the `level`
+field (string *or* numeric, so pino and bunyan work); anything else falls back
+to a regex over the text. Stack frames and other continuation lines are joined
+onto the record above.
 
-Both paths are best-effort — a format neither recognises still ships, just
-without a severity. Nothing is ever dropped for being unparseable.
+Verified against real output from these formats:
 
-If your logs use a different shape, point the patterns at it:
+| Format | Record boundaries | Severity |
+| --- | --- | --- |
+| JSON, string level (zap, winston, logback) | yes | yes |
+| JSON, numeric level (pino, bunyan) | yes | yes |
+| Java / Spring (logback default) | yes | yes |
+| Python (`logging` default) | yes | yes |
+| Go (logrus text, logfmt) | yes | yes |
+| Go (`log` stdlib) | yes | no level in the line to find |
+| .NET (default console, Serilog) | yes | yes |
+
+Both paths are best-effort. A format neither recognises still ships — it just
+arrives without a severity. **Nothing is ever dropped for being unparseable.**
+
+### Tuning it
 
 ```yaml
 agent:
   logs:
     parsing:
-      # A line matching this starts a NEW record; anything else is appended to
-      # the record above.
-      firstEntryRegex: '^(\{|\[|\d{4}-\d{2}-\d{2})'
+      # A line matching this CONTINUES the record above; anything else starts a
+      # new one. Covers indented frames plus `Caused by:`, `at `, tracebacks,
+      # `panic:`, and exception-class lines.
+      continuationRegex: '^(\s|Caused by:|at\s|panic:|...)'
       json:
-        severityField: level          # e.g. severity_text, levelname
+        severityField: level      # e.g. severity_text, levelname
       text:
-        severityRegex: '^\S+\s+(?P<severity>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE|DEBUG|INFO|...)\b'
 ```
 
-If your app's lines start with none of `firstEntryRegex`'s alternatives, every
-line would be appended to one record — give it a pattern that matches your
-format. `forceFlushPeriod` (5s) and `maxLogSize` (1MiB) bound that case rather
-than fix it.
+Note the direction: the pattern describes a **continuation**, not a record
+start. That is deliberate. With the inverse, any format the pattern doesn't
+recognise has *every* line treated as a continuation, and unrelated log events
+get merged into one record. Detecting continuations fails the safe way — an
+unknown format degrades to one-record-per-line, which is just the status quo.
+Splitting a record is recoverable; merging unrelated events is not.
+
+`forceFlushPeriod` (5s) and `maxLogSize` (1MiB) bound how long a record can be
+held open.
+
+The text severity regex is a heuristic: it looks for a level word within the
+first 48 characters, so a message merely *containing* "error" further along
+isn't misread. It can still be fooled — set your own pattern if that matters.
 
 Or leave logs raw and unparsed:
 

@@ -98,27 +98,61 @@ agent:
     # ships, just without a severity.
     parsing:
       enabled: true
-      # A line matching this starts a NEW record; anything else is appended to
-      # the record above (stack traces, wrapped messages). The default covers
-      # JSON, bracketed, and leading-ISO-date formats.
+      # A line matching this CONTINUES the record above (stack frames, wrapped
+      # messages); anything else starts a new record.
       #
-      # Formats whose lines start with none of these (e.g. a bare "starting...")
-      # would append EVERY line to one record — maxLogSize and forceFlushPeriod
-      # bound that, but such a format wants its own pattern here.
-      firstEntryRegex: '^(\{|\[|\d{4}-\d{2}-\d{2})'
-      # Safety valves for the case above: flush a buffered record after this long
-      # with no new line, and never let one grow past this many bytes.
+      # This detects continuations rather than record-starts, and that direction
+      # matters. The inverse ("a line matching X starts a record") appends every
+      # non-matching line to the record above — so a format the pattern does not
+      # know (Go's `time=...`/`2026/07/16`, .NET's `info:`) has EVERY line
+      # treated as a continuation and unrelated log events get merged into one
+      # record. Detecting continuations fails the safe way instead: an unknown
+      # format degrades to one-record-per-line, which is merely the status quo.
+      # Splitting a record is recoverable; merging unrelated events is not.
+      #
+      # Covers indented frames (universal: Java `\tat`, Python `  File`, Go
+      # `\t/app/x.go:10`, C# `   at`, JS `    at`) plus the unindented lines that
+      # are unambiguously part of a trace.
+      continuationRegex: '^(\s|Caused by:|\.\.\.\s\d+\smore|at\s|Traceback \(most recent call last\):|goroutine \d|panic:|\w+(\.\w+)*(Exception|Error)([:\s]|$))'
+      # Bounds the buffer: flush a held-open record after this long with no new
+      # line, and never let one grow past this size.
       forceFlushPeriod: 5s
       # Keep the unit suffix: a bare 1048576 renders through Helm as the float
       # 1.048576e+06, which is legal but unreadable in a shipped config.
       maxLogSize: 1MiB
       json:
-        # Field holding the level in a JSON log (logback/pino/zap: "level").
+        # Field holding the level in a JSON log (logback/zap/winston/pino).
         severityField: level
+        # pino and bunyan emit NUMERIC levels; without a mapping they arrive as
+        # severity text "30" with SeverityNumber Unspecified(0) — parsed but
+        # useless. String levels ("info") are understood without any mapping, so
+        # this only adds the numeric case.
+        severityMapping:
+          trace: 10
+          debug: 20
+          info: 30
+          warn: 40
+          error: 50
+          fatal: 60
       text:
-        # Anchored at the start so a message merely CONTAINING the word "error"
-        # is not misread as ERROR severity — the level must follow the timestamp.
-        severityRegex: '^\S+\s+(?P<severity>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
+        # Case-insensitive, and NOT anchored to an ISO timestamp: Python's
+        # default asctime is "2026-07-16 09:00:02,124" — date and time separated
+        # by a space — so a `^\S+\s+LEVEL` anchor never reaches the level. The
+        # {0,48} window keeps the level near the line start, so a message merely
+        # CONTAINING "error" further along is not misread as ERROR severity.
+        # Longer alternatives precede their abbreviations (INFO before INF).
+        # Heuristic, not a guarantee: unmatched simply means no severity.
+        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE|DEBUG|INFO|INF|WARNING|WARN|WRN|ERROR|ERR|FATAL|CRITICAL|CRIT)\b'
+        # The full names are understood already; the abbreviations are not. Left
+        # unmapped, Serilog's "[09:00:03 INF]" yields severity text "INF" with
+        # SeverityNumber Unspecified(0) — captured but unusable.
+        severityMapping:
+          trace: [trc]
+          debug: [dbg]
+          info: [inf]
+          warn: [wrn]
+          error: [err]
+          fatal: [crit, critical]
   # Tolerate everything by default. A DaemonSet that cannot schedule on a
   # tainted node produces no telemetry and no error — silent blindness.
   tolerations:

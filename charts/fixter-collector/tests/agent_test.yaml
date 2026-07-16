@@ -250,43 +250,100 @@ tests:
           path: data["config.yaml"]
           pattern: "on_error: send_quiet"
 
-  - it: lets an operator override the first-entry pattern for its own log format
+  - it: lets an operator override the continuation pattern for its own log format
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.firstEntryRegex: "^CUSTOM-START"
+      agent.logs.parsing.continuationRegex: "^CUSTOM-CONT"
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "CUSTOM-START"
+          pattern: "CUSTOM-CONT"
+
+  # The direction is the whole safety property. is_first_entry must be the
+  # NEGATION of a continuation pattern: with the inverse ("this starts a record"),
+  # any format the pattern does not know has EVERY line treated as a continuation
+  # and unrelated events merge into one record. Verified against the real binary:
+  # the un-negated form turned 12 mixed-language lines into 5 records, gluing a
+  # .NET log onto the end of a Python traceback.
+  - it: negates the continuation pattern so an unknown format never globs
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: .!\(body matches'
 
   # Regression: is_first_entry is an expr expression, so the pattern sits inside
   # a string literal and each backslash must survive expr's unescape before the
-  # regex engine sees it. Emitting the raw pattern renders `\{`, which expr
+  # regex engine sees it. Emitting the raw pattern renders `\s`, which expr
   # rejects at startup ("invalid char escape") — the collector then crashloops
   # and the node ships NO logs at all. Caught only by running the rendered
   # config; every string-presence assertion passed while it was broken.
-  - it: double-escapes the first-entry pattern so expr can compile it
+  - it: double-escapes the continuation pattern so expr can compile it
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: .body matches "\^\(\\\\\{'
+          pattern: 'is_first_entry: .!\(body matches "\^\(\\\\s\|'
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: .body matches "\^\([^\\]\\\{'
+          pattern: 'is_first_entry: .!\(body matches "\^\([^\\]\\s\|'
 
   - it: double-escapes an operator's custom pattern too
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.firstEntryRegex: '^\d{2}:\d{2}'
+      agent.logs.parsing.continuationRegex: '^\d{2}:\d{2}'
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: .body matches "\^\\\\d\{2\}:\\\\d\{2\}"'
+          pattern: 'is_first_entry: .!\(body matches "\^\\\\d\{2\}:\\\\d\{2\}"\)'
+
+  # pino/bunyan emit numeric levels. Unmapped they arrive as severity text "30"
+  # with SeverityNumber Unspecified(0) — parsed but useless.
+  - it: maps numeric JSON levels so pino and bunyan get a real severity
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "info: 30"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "error: 50"
+
+  # Serilog's "[09:00:03 INF]" captures INF, which is not a severity name stanza
+  # knows — without the mapping it yields SeverityNumber Unspecified(0).
+  - it: maps abbreviated text levels so Serilog-style logs get a real severity
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "info: \\[inf\\]"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "fatal: \\[crit, critical\\]"
+
+  # Python's default asctime is "2026-07-16 09:00:02,124" — date and time split
+  # by a space — so an ISO-anchored `^\S+\s+LEVEL` never reaches the level.
+  - it: does not anchor text severity to an ISO timestamp
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\(\?i\)\^\.\{0,48\}\?'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "INFO\\|INF"
 
   - it: lets an operator override the JSON severity field
     template: configmap-agent.yaml
