@@ -1,0 +1,3 @@
+2026-07-16T09:00:00.000000000Z stdout F 2026.07.16 09:00:00.100000 [ 123 ] {} <Information> Application: Ready for connections.
+2026-07-16T09:00:01.000000000Z stdout F 2026.07.16 09:00:00.200000 [ 124 ] {} <Warning> Context: 1. Check that the database is reachable
+2026-07-16T09:00:02.000000000Z stdout F 2026.07.16 09:00:00.300000 [ 125 ] {} <Debug> MemoryTracker: Peak memory usage 1.00 MiB.

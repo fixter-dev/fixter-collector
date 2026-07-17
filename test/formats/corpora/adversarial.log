@@ -1,0 +1,8 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16 09:00:00 INFO  Starting up
+2026-07-16T09:00:02.000000000Z stdout F 1. Check that the database is reachable
+2026-07-16T09:00:03.000000000Z stdout F at capacity, rejecting request
+2026-07-16T09:00:04.000000000Z stdout F 2026-07-16 09:00:00 trace-service ERROR Database connection lost
+2026-07-16T09:00:05.000000000Z stdout F 2026-07-16 09:00:00 [error-budget] INFO Burn rate nominal
+2026-07-16T09:00:06.000000000Z stdout F 10.0.0.1 - - [16/Jul/2026:09:00:00 +0000] "GET /error/ HTTP/1.1" 200 512 "-" "curl/8.0"
+2026-07-16T09:00:07.000000000Z stdout F 2026-07-16 09:00:00 Sending trace to collector endpoint
+2026-07-16T09:00:08.000000000Z stdout F 2026-07-16 09:00:00 Reloading config from log: /etc/app/app.conf

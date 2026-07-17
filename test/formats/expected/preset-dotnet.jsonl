@@ -1,0 +1,8 @@
+{"body":"dbug: MyApp.Data.ConnectionPool[0]\n      Opened connection 3 of 20","severity":"Debug(5)"}
+{"body":"fail: MyApp.Middleware.ExceptionHandlerMiddleware[1]\n      An unhandled exception has occurred while executing the request.\n      System.NullReferenceException: Object reference not set to an instance of an object.\n         at MyApp.Controllers.OrderController.Get() in /src/Controllers/OrderController.cs:line 42\n         at MyApp.Middleware.ExceptionHandlerMiddleware.Invoke(HttpContext context)","severity":"Error(17)"}
+{"body":"crit: MyApp.Program[0]\n      Application is shutting down due to an unrecoverable error.","severity":"Fatal(21)"}
+{"body":"info: Microsoft.Hosting.Lifetime[14]\n      Now listening on: http://0.0.0.0:8080","severity":"Info(9)"}
+{"body":"info: MyApp.Diagnostics.TraceService[0]\n      error budget exhausted for /checkout","severity":"Info(9)"}
+{"body":"trce: MyApp.Data.QueryLogger[0]\n      Executing SQL: SELECT * FROM orders WHERE id = @p0","severity":"Trace(1)"}
+{"body":"2026-07-16 09:00:18 info: MyApp.Program[0]\n      TimestampFormat variant: application started","severity":"Unspecified(0)"}
+{"body":"warn: MyApp.Services.PaymentService[0]\n      Retry attempt 1 of 3 for payment gateway","severity":"Warn(13)"}

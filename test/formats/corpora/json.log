@@ -1,0 +1,4 @@
+2026-07-16T09:00:01.000000000Z stdout F {"level":30,"time":1752652801000,"pid":1,"hostname":"web-7f9c8d","msg":"Server listening at http://0.0.0.0:3000"}
+2026-07-16T09:00:02.000000000Z stdout F {"level":40,"time":1752652802000,"pid":1,"hostname":"web-7f9c8d","msg":"deprecated config option 'foo' used"}
+2026-07-16T09:00:03.000000000Z stdout F {"level":50,"time":1752652803000,"pid":1,"hostname":"web-7f9c8d","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","trace_flags":"01","err":{"type":"Error","message":"connect ECONNREFUSED 127.0.0.1:5432","stack":"Error: connect ECONNREFUSED"},"msg":"database connection failed"}
+2026-07-16T09:00:04.000000000Z stdout F {"level":60,"time":1752652804000,"pid":1,"hostname":"web-7f9c8d","msg":"unrecoverable state, exiting"}

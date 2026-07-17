@@ -1,0 +1,4 @@
+2026-07-16T09:00:01.000000000Z stdout F I0716 09:00:00.123456 12345 daemon.cpp:32] Doris BE starting
+2026-07-16T09:00:02.000000000Z stdout F W0716 09:00:01.234567 12346 heartbeat_server.cpp:88] Fail to get master info, retrying
+2026-07-16T09:00:03.000000000Z stdout F E0716 09:00:02.345678 12347 olap_engine.cpp:150] Fail to load tablet meta for tablet 10086
+2026-07-16T09:00:04.000000000Z stdout F I0716 09:00:03.456789 12345 daemon.cpp:40] Doris BE started successfully

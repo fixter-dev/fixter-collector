@@ -1,0 +1,4 @@
+2026-07-16T09:00:01.000000000Z stdout F I0716 09:00:00.123456       1 kubelet.go:1620] "Starting kubelet"
+2026-07-16T09:00:02.000000000Z stdout F W0716 09:00:01.234567       1 container_manager_linux.go:894] "Failed to find cgroup mounts for controller" controller="misc"
+2026-07-16T09:00:03.000000000Z stdout F E0716 09:00:02.345678       1 pod_workers.go:1301] "Error syncing pod" err="failed to get sandbox image" pod="default/nginx-7d8f"
+2026-07-16T09:00:04.000000000Z stdout F I0716 09:00:03.456789       1 kubelet_node_status.go:72] "Attempting to register node" node="node-1"

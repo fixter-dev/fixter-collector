@@ -1,0 +1,3 @@
+2026-07-16T09:00:00.000000000Z stdout F info: MyApp.Orders[0] Order 4711 accepted
+2026-07-16T09:00:01.000000000Z stdout F warn: MyApp.Db[0] Connection retry 1 of 3
+2026-07-16T09:00:02.000000000Z stdout F fail: MyApp.Orders[0] Order 4712 rejected

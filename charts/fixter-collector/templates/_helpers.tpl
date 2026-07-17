@@ -52,19 +52,15 @@ FIXTER_API_KEY
 {{- if not .Values.fixter.endpoint -}}
 {{- fail "fixter.endpoint must not be empty" -}}
 {{- end -}}
+{{- include "fixter-collector.rejectLegacyParsing" . -}}
 {{- end -}}
 
-{{/* GOMEMLIMIT from a Kubernetes memory quantity.
+{{- define "fixter-collector.rejectLegacyParsing" -}}
+{{- if hasKey .Values.agent.logs "parsing" -}}
+{{- fail "agent.logs.parsing was removed in chart 0.2.0. Helm ignores unknown keys silently, so leaving it there would drop your overrides without a word and cost you the severities you believe you are setting. Migrate it: agent.logs.parsing.json -> agent.logs.structural.json, and agent.logs.parsing.glog -> agent.logs.structural.glog (behaviour unchanged, both on by default). agent.logs.parsing.text and agent.logs.parsing.continuationRegex are gone entirely — they applied one universal parser to every pod, which mislabelled severity (an ERROR from a service named `trace-service` arrived as Trace(1)). Add an agent.logs.formats entry with the matching preset for each text-logging workload instead. See the 0.1.x -> 0.2.0 migration note in the README." -}}
+{{- end -}}
+{{- end -}}
 
-     Kubernetes and Go do NOT share a format: k8s says `512Mi`, Go demands
-     `512MiB`. Feeding a k8s quantity straight to GOMEMLIMIT makes the Go
-     runtime abort during init — before main(), before --config is read — so
-     the pod crash-loops with `malformed GOMEMLIMIT` and no collector log.
-     Verified against the real image.
-
-     Go accepts only binary suffixes (B/KiB/MiB/GiB/TiB), so a decimal k8s
-     quantity like `512M` cannot be converted by appending B. Reject it at
-     template time rather than shipping a crash-loop. */}}
 {{- define "fixter-collector.goMemLimit" -}}
 {{- $m := . | toString -}}
 {{- if not (regexMatch "^[0-9]+(Ki|Mi|Gi|Ti)$" $m) -}}
@@ -73,9 +69,6 @@ FIXTER_API_KEY
 {{- printf "%sB" $m -}}
 {{- end -}}
 
-{{/* Shared resource attributes. k8s.cluster.name is emitted only when set —
-     it is optional, and simply absent otherwise. See Global Constraints for
-     why cloud auto-detection is not used. */}}
 {{- define "fixter-collector.resourceAttributes" -}}
 - key: deployment.environment
   value: {{ .Values.fixter.environment | quote }}

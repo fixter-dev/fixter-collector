@@ -1,0 +1,19 @@
+2026-07-16T09:00:01.000000000Z stdout F trce: MyApp.Data.QueryLogger[0]
+2026-07-16T09:00:02.000000000Z stdout F       Executing SQL: SELECT * FROM orders WHERE id = @p0
+2026-07-16T09:00:03.000000000Z stdout F dbug: MyApp.Data.ConnectionPool[0]
+2026-07-16T09:00:04.000000000Z stdout F       Opened connection 3 of 20
+2026-07-16T09:00:05.000000000Z stdout F info: Microsoft.Hosting.Lifetime[14]
+2026-07-16T09:00:06.000000000Z stdout F       Now listening on: http://0.0.0.0:8080
+2026-07-16T09:00:07.000000000Z stdout F info: MyApp.Diagnostics.TraceService[0]
+2026-07-16T09:00:08.000000000Z stdout F       error budget exhausted for /checkout
+2026-07-16T09:00:09.000000000Z stdout F warn: MyApp.Services.PaymentService[0]
+2026-07-16T09:00:10.000000000Z stdout F       Retry attempt 1 of 3 for payment gateway
+2026-07-16T09:00:11.000000000Z stdout F fail: MyApp.Middleware.ExceptionHandlerMiddleware[1]
+2026-07-16T09:00:12.000000000Z stdout F       An unhandled exception has occurred while executing the request.
+2026-07-16T09:00:13.000000000Z stdout F       System.NullReferenceException: Object reference not set to an instance of an object.
+2026-07-16T09:00:14.000000000Z stdout F          at MyApp.Controllers.OrderController.Get() in /src/Controllers/OrderController.cs:line 42
+2026-07-16T09:00:15.000000000Z stdout F          at MyApp.Middleware.ExceptionHandlerMiddleware.Invoke(HttpContext context)
+2026-07-16T09:00:16.000000000Z stdout F crit: MyApp.Program[0]
+2026-07-16T09:00:17.000000000Z stdout F       Application is shutting down due to an unrecoverable error.
+2026-07-16T09:00:18.000000000Z stdout F 2026-07-16 09:00:18 info: MyApp.Program[0]
+2026-07-16T09:00:19.000000000Z stdout F       TimestampFormat variant: application started

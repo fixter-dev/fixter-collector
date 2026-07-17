@@ -1,0 +1,6 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16T09:00:00.000Z ERROR 1 --- [main] com.foo.Bar : Boom
+2026-07-16T09:00:02.000000000Z stdout F java.lang.RuntimeException: bad thing
+2026-07-16T09:00:03.000000000Z stdout F 	at com.foo.Bar.baz(Bar.java:10)
+2026-07-16T09:00:04.000000000Z stdout F 	at com.foo.Bar.qux(Bar.java:20)
+2026-07-16T09:00:05.000000000Z stdout F {"level":"warn","message":"a json log line"}
+2026-07-16T09:00:06.000000000Z stdout F 2026-07-16T09:00:01.000Z INFO 1 --- [main] com.foo.Bar : after

@@ -1,0 +1,42 @@
+# Values for pass 2 (TestPresets) and pass 3 (TestNoMerge): render EVERY preset.
+#
+# The default config renders `formats: []`, so pass 1 exercises file_log/default
+# and nothing else — no preset receiver exists in it at all. Without this file a
+# preset regex could rot to any value, or stop matching entirely, and the harness
+# would stay green: exactly how the logfmt and Boot-2.x severity bugs shipped.
+#
+# One entry per preset, so `helm template -f` renders a file_log/<preset>
+# receiver for each and pass 2 can run a corpus through each one in isolation.
+# Every preset in agent.logs.presets MUST appear here; the suite fails if one
+# is missing, so adding a preset without a test is not possible by omission.
+#
+# The globs are deliberately unreachable paths, one distinct set per format: the
+# suite repoints each receiver's `include` at a corpus before running it, and
+# the chart REJECTS two formats with identical include sets (an earlier format
+# would exclude a later one from every file it asks for). They are never read.
+fixter:
+  apiKey: dummy
+
+agent:
+  logs:
+    formats:
+      - preset: spring
+        include: ["/nonexistent/verify-formats/spring/*.log"]
+      - preset: clickhouse
+        include: ["/nonexistent/verify-formats/clickhouse/*.log"]
+      - preset: postgres
+        include: ["/nonexistent/verify-formats/postgres/*.log"]
+      - preset: mysql
+        include: ["/nonexistent/verify-formats/mysql/*.log"]
+      - preset: doris-fe
+        include: ["/nonexistent/verify-formats/doris-fe/*.log"]
+      - preset: logfmt
+        include: ["/nonexistent/verify-formats/logfmt/*.log"]
+      - preset: python
+        include: ["/nonexistent/verify-formats/python/*.log"]
+      - preset: dotnet
+        include: ["/nonexistent/verify-formats/dotnet/*.log"]
+      - preset: go-stdlib
+        include: ["/nonexistent/verify-formats/go-stdlib/*.log"]
+      - preset: zap-console
+        include: ["/nonexistent/verify-formats/zap-console/*.log"]

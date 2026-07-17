@@ -40,12 +40,46 @@ data:
           load:
       {{- end }}
       {{- if .Values.agent.logs.enabled }}
-      file_log:
+      {{- $root := . }}
+      {{- $formats := .Values.agent.logs.formats }}
+      {{- include "fixter-collector.validateLogFormats" $formats }}
+      {{- range $i, $fmt := $formats }}
+      {{- $spec := $fmt }}
+      {{- if $fmt.preset }}
+      {{- $base := index $root.Values.agent.logs.presets $fmt.preset }}
+      {{- if not $base }}
+      {{- fail (printf "unknown log format preset %q. Available presets: %s." $fmt.preset (keys $root.Values.agent.logs.presets | sortAlpha | join ", ")) }}
+      {{- end }}
+      {{- $spec = deepCopy $base }}
+      {{- range $k, $v := (omit $fmt "preset") }}
+      {{- $_ := set $spec $k $v }}
+      {{- end }}
+      {{- end }}
+      file_log/{{ $fmt.name | default $fmt.preset }}:
+        include:
+          {{- range $fmt.include }}
+          - {{ . | quote }}
+          {{- end }}
+        {{- if gt (int $i) 0 }}
+        exclude:
+          {{- range $j, $prev := $formats }}
+          {{- if lt $j $i }}
+          {{- range $prev.include }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
+          {{- end }}
+        {{- end }}
+        start_at: end
+        include_file_path: true
+        operators:
+          {{- include "fixter-collector.logOperators" (dict "spec" $spec "root" $root) | nindent 10 }}
+          {{- include "fixter-collector.structuralSeverity" (dict "root" $root) | nindent 10 }}
+      {{- end }}
+      file_log/default:
         include:
           - /var/log/pods/*/*/*.log
         exclude:
-          # Never ship our own logs: that makes the collector log about shipping
-          # logs, ship that, and log about it. Not configurable, by design.
           - /var/log/pods/*_{{ include "fixter-collector.fullname" . }}*_*/*/*.log
           {{- range .Values.agent.logs.excludeNamespaces }}
           - /var/log/pods/{{ . }}_*/*/*.log
@@ -53,119 +87,16 @@ data:
           {{- range .Values.agent.logs.excludePods }}
           - /var/log/pods/*_{{ . }}*_*/*/*.log
           {{- end }}
+          {{- range $fmt := $formats }}
+          {{- range $fmt.include }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
         start_at: end
         include_file_path: true
         operators:
-          - type: container
-            id: container-parser
-          {{- with .Values.agent.logs.parsing }}
-          {{- if .enabled }}
-          # CRI writes stdout AND stderr interleaved into the SAME 0.log, so the
-          # file path alone is not a stream: a stderr stack trace lands inside
-          # whatever stdout line happened to precede it, inheriting its severity.
-          # An ERROR then hides inside an INFO record, invisible to every
-          # severity>=ERROR filter and alert. Key the recombine on path+stream so
-          # the two never interleave.
-          - type: add
-            id: recombine-key
-            field: attributes.recombine_source
-            value: 'EXPR(attributes["log.file.path"] + "|" + attributes["log.iostream"])'
-          # Join continuation lines into the record above. source_identifier is
-          # not cosmetic: without it every pod on the node shares one stream and
-          # unrelated logs get stitched together.
-          - type: recombine
-            id: multiline
-            combine_field: body
-            combine_with: "\n"
-            # Negated: the pattern describes a CONTINUATION, so a new record is
-            # any line that is not one. See continuationRegex in values.yaml for
-            # why this direction is the safe one.
-            #
-            # is_first_entry is an expr expression, so the pattern lands inside a
-            # string literal and every backslash must survive TWO unescapes (expr's,
-            # then the regex engine's). Without this the collector refuses to start:
-            # "failed to compile is_first_entry: invalid char escape".
-            is_first_entry: '!(body matches "{{ .continuationRegex | replace "\\" "\\\\" }}")'
-            source_identifier: attributes["recombine_source"]
-            max_log_size: {{ .maxLogSize }}
-            force_flush_period: {{ .forceFlushPeriod }}
-          - type: router
-            id: format-router
-            routes:
-              - expr: 'body matches "^\\s*\\{"'
-                output: json-severity
-              {{- if .glog.enabled }}
-              - expr: 'body matches "{{ .glog.detectRegex | replace "\\" "\\\\" }}"'
-                output: glog-severity
-              {{- end }}
-            default: text-severity
-          # Both parsers are send_quiet on error: an unrecognised format must
-          # degrade to "no severity", never to "no log".
-          - type: json_parser
-            id: json-severity
-            parse_from: body
-            parse_to: attributes
-            on_error: send_quiet
-            output: parsed
-            severity:
-              parse_from: attributes.{{ .json.severityField }}
-              {{- with .json.severityMapping }}
-              mapping:
-                {{- range $level, $value := . }}
-                {{ $level }}: {{ $value }}
-                {{- end }}
-              {{- end }}
-            trace:
-              trace_id:
-                parse_from: attributes.{{ .json.traceIdField }}
-              span_id:
-                parse_from: attributes.{{ .json.spanIdField }}
-              trace_flags:
-                parse_from: attributes.{{ .json.traceFlagsField }}
-          {{- if .glog.enabled }}
-          - type: regex_parser
-            id: glog-severity
-            parse_from: body
-            regex: '{{ .glog.severityRegex }}'
-            parse_to: attributes
-            on_error: send_quiet
-            output: parsed
-            severity:
-              parse_from: attributes.severity
-              {{- with .glog.severityMapping }}
-              mapping:
-                {{- range $level, $values := . }}
-                # toJson, not join: it quotes each value. An unquoted `log:` in a
-                # YAML flow sequence parses as a nested map, and the collector
-                # then refuses to start ("cannot be parsed as a severity").
-                {{ $level }}: {{ $values | toJson }}
-                {{- end }}
-              {{- end }}
-          {{- end }}
-          - type: regex_parser
-            id: text-severity
-            parse_from: body
-            regex: '{{ .text.severityRegex }}'
-            parse_to: attributes
-            on_error: send_quiet
-            output: parsed
-            severity:
-              parse_from: attributes.severity
-              {{- with .text.severityMapping }}
-              mapping:
-                {{- range $level, $values := . }}
-                # toJson, not join: it quotes each value. An unquoted `log:` in a
-                # YAML flow sequence parses as a nested map, and the collector
-                # then refuses to start ("cannot be parsed as a severity").
-                {{ $level }}: {{ $values | toJson }}
-                {{- end }}
-              {{- end }}
-          # Both routes converge here; without it json-severity would fall
-          # through to text-severity and re-parse its own output.
-          - type: noop
-            id: parsed
-          {{- end }}
-          {{- end }}
+          {{- include "fixter-collector.logOperators" (dict "spec" (dict "continuationRegex" "^\\s") "root" $root) | nindent 10 }}
+          {{- include "fixter-collector.structuralSeverity" (dict "root" $root) | nindent 10 }}
       {{- end }}
     processors:
       memory_limiter:
@@ -198,16 +129,6 @@ data:
       resource:
         attributes:
           {{- include "fixter-collector.resourceAttributes" . | nindent 10 }}
-      # Pod logs (from file paths) and pod/container metrics (from kubelet) carry no
-      # service identity, and Fixter groups every signal by it. Derive the service
-      # identity triad from the k8s attributes k8s_attributes already extracted
-      # (service.name falls back deployment → container).
-      # action: insert only fills a MISSING key, so this is self-scoping:
-      #   - OTLP-relayed app telemetry that already set these is never overwritten;
-      #   - node/host_metrics have no owning deployment/pod, so the inserts are no-ops
-      #     and they stay serviceless, as infra metrics should.
-      # (host.* and deployment.environment are already set by resource_detection and the
-      #  resource processor; service.version can't be derived from k8s metadata.)
       resource/derive_service:
         attributes:
           - key: service.name
@@ -247,7 +168,10 @@ data:
         logs:
           receivers:
             {{- if .Values.agent.logs.enabled }}
-            - file_log
+            {{- range .Values.agent.logs.formats }}
+            - file_log/{{ .name | default .preset }}
+            {{- end }}
+            - file_log/default
             {{- end }}
             {{- if .Values.agent.otlpRelay }}
             - otlp

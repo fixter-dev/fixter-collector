@@ -1,0 +1,7 @@
+{"body":"DEBUG:__main__:Cache hit for key user:42","severity":"Unspecified(0)"}
+{"body":"ERROR:__main__:Unhandled exception in request handler","severity":"Unspecified(0)"}
+{"body":"INFO:__main__:Listening on 0.0.0.0:8000","severity":"Unspecified(0)"}
+{"body":"INFO:__main__:Starting worker pool","severity":"Unspecified(0)"}
+{"body":"KeyError: 'id'","severity":"Unspecified(0)"}
+{"body":"Traceback (most recent call last):\n  File \"/app/main.py\", line 42, in handle_request\n    result = process(payload)\n  File \"/app/main.py\", line 20, in process\n    return payload[\"id\"]","severity":"Unspecified(0)"}
+{"body":"WARNING:urllib3.connectionpool:Retrying (Retry(total=2)) after connection broken by 'ConnectionError'","severity":"Unspecified(0)"}

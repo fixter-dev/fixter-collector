@@ -1,0 +1,4 @@
+{"body":"E0716 09:00:02.345678 12347 olap_engine.cpp:150] Fail to load tablet meta for tablet 10086","severity":"Error(17)"}
+{"body":"I0716 09:00:00.123456 12345 daemon.cpp:32] Doris BE starting","severity":"Info(9)"}
+{"body":"I0716 09:00:03.456789 12345 daemon.cpp:40] Doris BE started successfully","severity":"Info(9)"}
+{"body":"W0716 09:00:01.234567 12346 heartbeat_server.cpp:88] Fail to get master info, retrying","severity":"Warn(13)"}

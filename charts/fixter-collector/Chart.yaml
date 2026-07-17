@@ -1,11 +1,9 @@
-# apiVersion v2 is current and NOT deprecated — it is the only released chart
-# format, and Helm 4 loads it natively. Chart v3 is experimental and gated.
 apiVersion: v2
 name: fixter-collector
 description: Fixter OpenTelemetry Collector — infrastructure telemetry for Kubernetes
 type: application
-version: 0.1.3
-appVersion: "0.1.1"
+version: 0.2.0
+appVersion: "0.2.0"
 kubeVersion: ">=1.23.0-0"
 home: https://github.com/fixter-dev/fixter-collector
 sources:

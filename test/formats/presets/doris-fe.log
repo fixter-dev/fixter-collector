@@ -1,0 +1,14 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16 09:00:00,123 INFO (main|1) [Catalog.init():456] starting catalog
+2026-07-16T09:00:02.000000000Z stdout F 2026-07-16 09:00:01,124 WARN (main|1) [Catalog.init():457] slow metadata load
+2026-07-16T09:00:03.000000000Z stdout F 2026-07-16 09:00:02,125 ERROR (main|1) [Catalog.init():458] failed to replay journal
+2026-07-16T09:00:04.000000000Z stdout F java.lang.RuntimeException: boom
+2026-07-16T09:00:05.000000000Z stdout F 	at org.apache.doris.catalog.Catalog.init(Catalog.java:458)
+2026-07-16T09:00:06.000000000Z stdout F 09:00:05,128 ERROR (main|1) [Catalog.init():460] time-only pattern variant
+2026-07-16T09:00:07.000000000Z stdout F 09:00:06,129 INFO (main|1) [Catalog.init():461] time-only pattern variant
+2026-07-16T09:00:08.000000000Z stdout F org.apache.doris.catalog.Catalog: INFO logger-first layout info
+2026-07-16T09:00:09.000000000Z stdout F org.apache.doris.qe.Coordinator: ERROR logger-first layout error
+2026-07-16T09:00:10.000000000Z stdout F org.apache.doris.catalog.Catalog: ERROR logger-first layout boom
+2026-07-16T09:00:11.000000000Z stdout F java.lang.RuntimeException: logger-first trace still joins
+2026-07-16T09:00:12.000000000Z stdout F 	at org.apache.doris.catalog.Catalog.init(Catalog.java:460)
+2026-07-16T09:00:13.000000000Z stdout F 2026-07-16 09:00:07,130 WARN (main|1) [Pool.check():99] pool exhausted
+2026-07-16T09:00:14.000000000Z stdout F at capacity, rejecting request

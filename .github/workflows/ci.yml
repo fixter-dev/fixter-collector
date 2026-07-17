@@ -63,6 +63,18 @@ jobs:
           fi
       - name: Validate every rendered config against the real binary
         run: ./scripts/validate.sh
+      # Three passes: the catch-all's goldens, every preset's goldens, and the
+      # no-merge guard — N ordinary lines with no stack trace among them must
+      # produce N records, because any join with no trace present is a preset
+      # swallowing a log line. See test/formats/README.md.
+      #
+      # Builds the chart's filelog receiver in-process from the CHART's rendered
+      # config, so it needs helm but NOT ./_build/fixter-collector. It sits in
+      # this job because the job already has Go and Helm, not because it depends
+      # on the build above.
+      - name: Verify log formats, that no preset merges ordinary lines, and that no file is collected twice
+        run: go test ./... -count=1
+        working-directory: test/formats
 
   smoke:
     runs-on: ubuntu-24.04-arm

@@ -1,0 +1,17 @@
+2026-07-16T09:00:01.000000000Z stderr F 2026-07-16T09:00:01.000Z	INFO	myapp/main.go:23	listening on :8080
+2026-07-16T09:00:02.000000000Z stderr F 2026-07-16T09:00:02.000Z	WARN	myapp/main.go:24	retrying payment gateway	{"attempt": "1"}
+2026-07-16T09:00:03.000000000Z stderr F main.main
+2026-07-16T09:00:04.000000000Z stderr F 	/app/main.go:24
+2026-07-16T09:00:05.000000000Z stderr F runtime.main
+2026-07-16T09:00:06.000000000Z stderr F 	/usr/local/go/src/runtime/proc.go:290
+2026-07-16T09:00:07.000000000Z stderr F 2026-07-16T09:00:03.000Z	ERROR	myapp/main.go:25	query failed	{"error": "db down"}
+2026-07-16T09:00:08.000000000Z stderr F main.main
+2026-07-16T09:00:09.000000000Z stderr F 	/app/main.go:25
+2026-07-16T09:00:10.000000000Z stderr F 2026-07-16T09:00:04.000Z	info	myapp/main.go:30	prod console info
+2026-07-16T09:00:11.000000000Z stderr F 2026-07-16T09:00:05.000Z	error	myapp/main.go:31	prod console error	{"k": "v"}
+2026-07-16T09:00:12.000000000Z stderr F 2026-07-16T09:00:06.000Z	INFO	trace-service/main.go:40	error budget exhausted
+2026-07-16T09:00:13.000000000Z stderr F INFO	myapp/main.go:41	no-time-encoder variant
+2026-07-16T09:00:14.000000000Z stderr F ERROR	myapp/main.go:42	no-time-encoder variant error
+2026-07-16T09:00:15.000000000Z stderr F 2026-07-16T09:00:07.000Z INFO cfg.go:50 loaded config.yaml
+2026-07-16T09:00:16.000000000Z stderr F 2026-07-16T09:00:08.000Z ERROR db.go:40 lost connection to 10.0.0.1
+2026-07-16T09:00:17.000000000Z stderr F 1784228809.037|info|main.go:31|api.example.com

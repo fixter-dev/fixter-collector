@@ -1,0 +1,7 @@
+2026-07-16T09:00:01.000000000Z stdout F ts=2026-07-16T09:00:00Z caller=main.go:10 msg="operator requested level=trace" level=error err="db down"
+2026-07-16T09:00:02.000000000Z stdout F ts=2026-07-16T09:00:01Z caller=main.go:11 level=info msg="all good"
+2026-07-16T09:00:03.000000000Z stdout F level=warn msg="disk nearly full" pct=91
+2026-07-16T09:00:04.000000000Z stdout F ts=2026-07-16T09:00:03Z caller=main.go:13 msg="no level field here" err="x"
+2026-07-16T09:00:05.000000000Z stdout F ts=2026-07-16T09:00:04Z level=debug msg="cache warm"
+2026-07-16T09:00:06.000000000Z stdout F panic: runtime error: index out of range [3] with length 2
+2026-07-16T09:00:07.000000000Z stdout F goroutine 1 [running]:

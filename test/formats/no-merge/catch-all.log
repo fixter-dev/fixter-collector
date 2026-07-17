@@ -1,0 +1,12 @@
+2026-07-16T09:00:01.000000000Z stdout F level=info msg="server started" port=8080
+2026-07-16T09:00:02.000000000Z stdout F 2026/07/16 09:00:02 background worker pool ready
+2026-07-16T09:00:03.000000000Z stdout F WARN  retry budget below threshold
+2026-07-16T09:00:04.000000000Z stdout F {"level":"error","msg":"db connection lost"}
+2026-07-16T09:00:05.000000000Z stdout F Started GET "/api/v1/orders" for 10.0.0.5 at 2026-07-16 09:00:05
+2026-07-16T09:00:06.000000000Z stdout F com.shop.CheckoutException: item was null
+2026-07-16T09:00:07.000000000Z stdout F 	at com.shop.Cart.total(Cart.java:88)
+2026-07-16T09:00:08.000000000Z stdout F 	at com.shop.Order.checkout(Order.java:42)
+2026-07-16T09:00:09.000000000Z stdout F Traceback (most recent call last):
+2026-07-16T09:00:10.000000000Z stdout F   File "/srv/app.py", line 55, in handle
+2026-07-16T09:00:11.000000000Z stdout F     raise CheckoutError(item)
+2026-07-16T09:00:12.000000000Z stdout F CheckoutError: item was null

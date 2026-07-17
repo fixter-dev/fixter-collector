@@ -1,0 +1,39 @@
+2026-07-16T09:00:01.000000000Z stderr F INFO:__main__:Listening on 0.0.0.0:8000
+2026-07-16T09:00:02.000000000Z stderr F ERROR:trace-service:payment gateway unreachable
+2026-07-16T09:00:03.000000000Z stderr F INFO:__main__:GET /error/ HTTP/1.1" 200 512
+2026-07-16T09:00:04.000000000Z stderr F WARNING:__main__:Retrying (Retry(total=2)) after connection broken by 'ConnectionError'
+2026-07-16T09:00:05.000000000Z stderr F ERROR:__main__:Unhandled exception in request handler
+2026-07-16T09:00:06.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:07.000000000Z stderr F   File "/app/main.py", line 21, in handle_request
+2026-07-16T09:00:08.000000000Z stderr F     return payload["id"]
+2026-07-16T09:00:09.000000000Z stderr F KeyError: 'id'
+2026-07-16T09:00:10.000000000Z stderr F CRITICAL:__main__:worker pool exhausted, shutting down
+2026-07-16T09:00:11.000000000Z stderr F DEBUG:__main__:Cache hit for key user:42
+2026-07-16T09:00:12.000000000Z stderr F 2026-07-16 09:00:12,801 - __main__ - INFO - Listening on 0.0.0.0:8000
+2026-07-16T09:00:13.000000000Z stderr F 2026-07-16 09:00:13,801 - __main__ - ERROR - Unhandled exception in request handler
+2026-07-16T09:00:14.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:15.000000000Z stderr F   File "/app/main.py", line 29, in handle_request
+2026-07-16T09:00:16.000000000Z stderr F     return payload["id"]
+2026-07-16T09:00:17.000000000Z stderr F KeyError: 'id'
+2026-07-16T09:00:18.000000000Z stderr F 2026-07-16 09:00:18,826 WARNING disk usage above 80%
+2026-07-16T09:00:19.000000000Z stderr F 2026-07-16 09:00:19 ERROR payment gateway unreachable
+2026-07-16T09:00:20.000000000Z stderr F 2026-07-16 09:00:20,014 INFO Listening on 0.0.0.0:8000
+2026-07-16T09:00:21.000000000Z stderr F 2026-07-16 09:00:21 CRITICAL datefmt-variant worker pool exhausted
+2026-07-16T09:00:22.000000000Z stderr F DEBUG: levelname-colon variant cache warm
+2026-07-16T09:00:23.000000000Z stderr F urllib3.connectionpool: Starting new HTTPS connection (1): api.example.com:443
+2026-07-16T09:00:24.000000000Z stderr F myapp.handlers:ERROR:payment gateway unreachable
+2026-07-16T09:00:25.000000000Z stderr F myapp.workers: logger-first layout boom
+2026-07-16T09:00:26.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:27.000000000Z stderr F   File "/app/worker.py", line 12, in run
+2026-07-16T09:00:28.000000000Z stderr F     await asyncio.wait_for(fetch(), 1)
+2026-07-16T09:00:29.000000000Z stderr F asyncio.TimeoutError: timed out
+2026-07-16T09:00:30.000000000Z stderr F ERROR:__main__:regex compile failed
+2026-07-16T09:00:31.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:32.000000000Z stderr F   File "/app/main.py", line 21, in handler
+2026-07-16T09:00:33.000000000Z stderr F     re.compile(pattern)
+2026-07-16T09:00:34.000000000Z stderr F re.error: bad escape \d at position 0
+2026-07-16T09:00:35.000000000Z stderr F ERROR:__main__:user lookup failed
+2026-07-16T09:00:36.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:37.000000000Z stderr F   File "/app/views.py", line 9, in get
+2026-07-16T09:00:38.000000000Z stderr F     User.objects.get(pk=1)
+2026-07-16T09:00:39.000000000Z stderr F myapp.models.User.DoesNotExist: User matching query does not exist.

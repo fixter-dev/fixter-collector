@@ -18,8 +18,6 @@ spec:
             secretKeyRef:
               name: {{ include "fixter-collector.secretName" . }}
               key: {{ include "fixter-collector.secretKey" . }}
-        # Endpoint passed via env, NOT interpolated into the shell string — a
-        # single quote in the value would otherwise break quoting and inject.
         - name: FIXTER_ENDPOINT
           value: {{ .Values.fixter.endpoint | quote }}
       command:
@@ -27,11 +25,6 @@ spec:
         - -c
         - |
           set -eu
-          # `|| echo 000` is load-bearing: on a real connection failure curl
-          # exits non-zero, which under `set -eu` would kill the script at this
-          # line — before the case runs — so the unreachable-endpoint path would
-          # fail SILENTLY. The most likely real failure (customer egress/firewall
-          # blocking ingest) is exactly the one this guards.
           CODE=$(curl -s -o /dev/null -w '%{http_code}' \
             -X POST "${FIXTER_ENDPOINT}/v1/metrics" \
             -H 'Content-Type: application/json' \

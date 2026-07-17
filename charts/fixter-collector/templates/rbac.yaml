@@ -23,8 +23,6 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs", "cronjobs"]
     verbs: ["get", "list", "watch"]
-  # k8s_cluster collects HPA metrics by default; without this grant it drops
-  # them and spam-logs "failed to watch horizontalpodautoscalers ... forbidden".
   - apiGroups: ["autoscaling"]
     resources: ["horizontalpodautoscalers"]
     verbs: ["get", "list", "watch"]

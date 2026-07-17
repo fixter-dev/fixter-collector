@@ -1,0 +1,4 @@
+2026-07-16T09:00:00.000000000Z stderr F LOG:  database system is ready to accept connections
+2026-07-16T09:00:01.000000000Z stderr F ERROR:  relation "orders" does not exist at character 15
+2026-07-16T09:00:02.000000000Z stderr F WARNING:  there is no transaction in progress
+2026-07-16T09:00:03.000000000Z stderr F LOG:  checkpoint complete: wrote 42 buffers

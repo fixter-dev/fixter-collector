@@ -7,8 +7,6 @@ metadata:
   labels:
     {{- include "fixter-collector.labels" . | nindent 4 }}
 spec:
-  # Exactly 1, never configurable: k8s_cluster and prometheus duplicate their
-  # output per replica, so scaling this double-counts rather than adds HA.
   replicas: 1
   selector:
     matchLabels:
@@ -19,8 +17,6 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap-cluster.yaml") . | sha256sum }}
-        # Restart on API-key rotation too — otherwise `helm upgrade --set
-        # fixter.apiKey=new` updates the Secret but pods keep the old key.
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         app.kubernetes.io/name: {{ include "fixter-collector.name" . }}

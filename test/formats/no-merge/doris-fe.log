@@ -1,0 +1,8 @@
+2026-07-16T09:00:00.000000000Z stdout F Frontend started, waiting for BE heartbeats
+2026-07-16T09:00:01.000000000Z stdout F at capacity, rejecting request
+2026-07-16T09:00:02.000000000Z stdout F Catalog reloaded in 120 ms
+2026-07-16T09:00:03.000000000Z stdout F Retrying heartbeat to be-1
+2026-07-16T09:00:04.000000000Z stdout F org.apache.doris.catalog.Catalog: INFO  replayed 120 journal entries
+2026-07-16T09:00:05.000000000Z stdout F org.apache.doris.system.HeartbeatMgr: WARN  be-1 heartbeat late by 2s
+2026-07-16T09:00:06.000000000Z stdout F org.apache.doris.system.HeartbeatMgr: ERROR be-1 marked down
+2026-07-16T09:00:07.000000000Z stdout F org.apache.doris.catalog.Catalog: INFO  metadata checkpoint written

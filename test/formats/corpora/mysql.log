@@ -1,0 +1,4 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16T09:00:00.123456Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.35) starting as process 1
+2026-07-16T09:00:02.000000000Z stdout F 2026-07-16T09:00:00.234567Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-07-16T09:00:03.000000000Z stdout F 2026-07-16T09:00:01.345678Z 0 [ERROR] [MY-013183] [InnoDB] Failure while parsing table space.
+2026-07-16T09:00:04.000000000Z stdout F 2026-07-16T09:00:02.456789Z 1 [Note] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections.

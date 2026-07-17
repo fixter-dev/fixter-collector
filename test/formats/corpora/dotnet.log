@@ -1,0 +1,8 @@
+2026-07-16T09:00:01.000000000Z stdout F info: Microsoft.Hosting.Lifetime[14]
+2026-07-16T09:00:02.000000000Z stdout F       Now listening on: http://0.0.0.0:8080
+2026-07-16T09:00:03.000000000Z stdout F warn: MyApp.Services.PaymentService[0]
+2026-07-16T09:00:04.000000000Z stdout F       Retry attempt 1 of 3 for payment gateway
+2026-07-16T09:00:05.000000000Z stdout F fail: MyApp.Middleware.ExceptionHandlerMiddleware[1]
+2026-07-16T09:00:06.000000000Z stdout F       An unhandled exception has occurred while executing the request.
+2026-07-16T09:00:07.000000000Z stdout F       System.NullReferenceException: Object reference not set to an instance of an object.
+2026-07-16T09:00:08.000000000Z stdout F          at MyApp.Controllers.OrderController.Get() in /src/Controllers/OrderController.cs:line 42
