@@ -1,4 +1,4 @@
-fixter-collector {{ .Chart.AppVersion }} is installed.
+fixter-collector chart {{ .Chart.Version }} is installed (collector binary {{ .Chart.AppVersion }}).
 
 Shipping to: {{ .Values.fixter.endpoint }}
 Environment: {{ .Values.fixter.environment }}
@@ -23,4 +23,24 @@ Cluster:     {{ .Values.fixter.clusterName }}
 Pod logs are ON. Excluded: the collector's own pods{{ range .Values.agent.logs.excludeNamespaces }}, {{ . }}{{ end }}.
 Rough volume: 10k logs/s of ~216-byte lines is ~186 GB/day. Trim with
 agent.logs.excludeNamespaces / excludePods, or set agent.logs.enabled=false.
+{{ if not .Values.agent.logs.formats }}
+NOTE: agent.logs.formats is empty, so no text format is being parsed.
+
+  JSON and glog logs are still read structurally and keep their severity. Every
+  OTHER text format now arrives ONE RECORD PER LINE with NO severity: a stack
+  trace becomes one record per frame, and an ERROR ships as Unspecified(0),
+  invisible to a severity>=ERROR alert.
+
+  If you are upgrading from CHART 0.1.x this is a CHANGE, and it is silent —
+  chart 0.1.x parsed text logs by default. Note that the chart version and the
+  collector binary version above are DIFFERENT numbers: this notice is about the
+  chart ({{ .Chart.Version }}), not the binary ({{ .Chart.AppVersion }}). Expect
+  a 2-3x rise in record count, which is what you are billed on. It applies
+  whether or not you ever set agent.logs.parsing: rendering clean is not the
+  same as being unaffected.
+
+  Add an agent.logs.formats entry with the matching preset for each text-logging
+  workload to restore joining and severity. Presets available: {{ keys .Values.agent.logs.presets | sortAlpha | join ", " }}.
+  See the 0.1.x -> 0.2.0 migration note in the README.
+{{ end -}}
 {{ end -}}

@@ -1,0 +1,21 @@
+{"body":"DEBUG: levelname-colon variant cache warm","severity":"Debug(5)"}
+{"body":"DEBUG:__main__:Cache hit for key user:42","severity":"Debug(5)"}
+{"body":"2026-07-16 09:00:13,801 - __main__ - ERROR - Unhandled exception in request handler\nTraceback (most recent call last):\n  File \"/app/main.py\", line 29, in handle_request\n    return payload[\"id\"]\nKeyError: 'id'","severity":"Error(17)"}
+{"body":"2026-07-16 09:00:19 ERROR payment gateway unreachable","severity":"Error(17)"}
+{"body":"ERROR:__main__:Unhandled exception in request handler\nTraceback (most recent call last):\n  File \"/app/main.py\", line 21, in handle_request\n    return payload[\"id\"]\nKeyError: 'id'","severity":"Error(17)"}
+{"body":"ERROR:__main__:regex compile failed\nTraceback (most recent call last):\n  File \"/app/main.py\", line 21, in handler\n    re.compile(pattern)","severity":"Error(17)"}
+{"body":"ERROR:__main__:user lookup failed\nTraceback (most recent call last):\n  File \"/app/views.py\", line 9, in get\n    User.objects.get(pk=1)","severity":"Error(17)"}
+{"body":"ERROR:trace-service:payment gateway unreachable","severity":"Error(17)"}
+{"body":"2026-07-16 09:00:21 CRITICAL datefmt-variant worker pool exhausted","severity":"Fatal(21)"}
+{"body":"CRITICAL:__main__:worker pool exhausted, shutting down","severity":"Fatal(21)"}
+{"body":"2026-07-16 09:00:12,801 - __main__ - INFO - Listening on 0.0.0.0:8000","severity":"Info(9)"}
+{"body":"2026-07-16 09:00:20,014 INFO Listening on 0.0.0.0:8000","severity":"Info(9)"}
+{"body":"INFO:__main__:GET /error/ HTTP/1.1\" 200 512","severity":"Info(9)"}
+{"body":"INFO:__main__:Listening on 0.0.0.0:8000","severity":"Info(9)"}
+{"body":"myapp.handlers:ERROR:payment gateway unreachable","severity":"Unspecified(0)"}
+{"body":"myapp.models.User.DoesNotExist: User matching query does not exist.","severity":"Unspecified(0)"}
+{"body":"myapp.workers: logger-first layout boom\nTraceback (most recent call last):\n  File \"/app/worker.py\", line 12, in run\n    await asyncio.wait_for(fetch(), 1)\nasyncio.TimeoutError: timed out","severity":"Unspecified(0)"}
+{"body":"re.error: bad escape \\d at position 0","severity":"Unspecified(0)"}
+{"body":"urllib3.connectionpool: Starting new HTTPS connection (1): api.example.com:443","severity":"Unspecified(0)"}
+{"body":"2026-07-16 09:00:18,826 WARNING disk usage above 80%","severity":"Warn(13)"}
+{"body":"WARNING:__main__:Retrying (Retry(total=2)) after connection broken by 'ConnectionError'","severity":"Warn(13)"}

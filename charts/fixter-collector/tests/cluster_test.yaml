@@ -74,8 +74,6 @@ tests:
           path: spec.template.spec.containers[0].args
           content: --config=/conf/config.yaml
 
-  # Regression: the singleton must schedule on a fully-tainted cluster, or
-  # cluster metrics vanish silently (Pending forever).
   - it: tolerates all taints by default so the singleton always schedules
     template: deployment-cluster.yaml
     set:
@@ -86,8 +84,6 @@ tests:
           content:
             operator: Exists
 
-  # Regression: a public chart mounting host paths must ship hardened, and
-  # readOnlyRootFilesystem must hold (the collector writes nothing to rootfs).
   - it: hardens the container security context
     template: deployment-cluster.yaml
     set:
@@ -103,8 +99,6 @@ tests:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: true
 
-  # Regression: rotating the API key must restart pods (checksum/secret), else
-  # the new key is in the Secret but pods keep the old one until manual bounce.
   - it: annotates a secret checksum so key rotation restarts pods
     template: deployment-cluster.yaml
     set:
@@ -113,9 +107,6 @@ tests:
       - exists:
           path: spec.template.metadata.annotations["checksum/secret"]
 
-  # Regression: GOMEMLIMIT in Kubernetes format (512Mi) aborts the Go runtime
-  # during init with `malformed GOMEMLIMIT` — before main(), so the pod
-  # crash-loops with no collector log. Go needs 512MiB.
   - it: converts the memory limit to Go's GOMEMLIMIT format, not Kubernetes'
     template: deployment-cluster.yaml
     set:
@@ -155,17 +146,6 @@ tests:
           path: data["config.yaml"]
           pattern: "value: \"my-cluster\""
 
-  # `errorPattern` (regex, substring) NOT `errorMessage` (exact, reflect.DeepEqual).
-  # Our fail text is longer than the fragment we care about, so exact match fails.
-  # Keep these patterns free of regex metacharacters — parens would become a
-  # capture group and silently match text that has no parens.
-  #
-  # These two assert on secret.yaml, NOT configmap-cluster.yaml. All three
-  # templates call the same `validate` guard (deliberately — secret.yaml's is
-  # load-bearing when cluster.enabled=false), but Helm renders same-depth files
-  # in reverse-alphabetical order, so secret.yaml always raises first and
-  # helm-unittest attributes the failure to it. The chart behaviour is correct
-  # either way; only the attribution is order-dependent.
   - it: refuses to render with no credentials at all
     template: secret.yaml
     asserts:
@@ -181,9 +161,6 @@ tests:
       - failedTemplate:
           errorPattern: "not both"
 
-  # Regression: k8s_cluster collects HPA metrics by default; a missing
-  # autoscaling grant drops them and spam-logs forbidden errors (found in a
-  # real kind cluster). documentIndex 0 is the ClusterRole.
   - it: grants HPA read so k8s_cluster neither drops HPA metrics nor errors
     template: rbac.yaml
     documentIndex: 0

@@ -1,0 +1,6 @@
+2026-07-16T09:00:00.000000000Z stdout F starting order-service
+2026-07-16T09:00:01.000000000Z stdout F fixter-collector.service
+2026-07-16T09:00:02.000000000Z stdout F loaded config from /etc/fixter/config.yaml
+2026-07-16T09:00:03.000000000Z stdout F listening on :8080
+2026-07-16T09:00:04.000000000Z stdout F /etc/fixter/config.yaml
+2026-07-16T09:00:05.000000000Z stdout F shutdown complete in 1.2s

@@ -1,0 +1,60 @@
+# DECLARED RESIDUAL MERGES — accepted data loss, one entry per preset.
+#
+# Read TestNoMerge in test/formats/formats_test.go and test/formats/README.md before you
+# touch this file. Every entry here is a preset that SWALLOWS an ordinary log
+# line under the config its corpus is written in. That is data loss: the line is
+# concatenated into its neighbour and stamped with the neighbour's severity.
+#
+# Pass 3's default expectation is `records == the corpus' line count`. A
+# no-merge corpus contains no stack traces, so nothing in it may legitimately
+# join and the count is derived, not blessed — there is no golden to re-bless
+# and no way to move the expectation by editing one. Lowering it requires an
+# entry HERE, naming the preset, the number, and why the merge is accepted.
+#
+# The number is HELD in BOTH directions: pass 3 asserts `records == expected`
+# exactly. If a preset gets worse the count drops and pass 3 fails. If someone
+# BOUNDS the branch and the merge stops, the count rises to the line count and
+# pass 3 fails too — forcing this entry to be deleted rather than left behind as
+# a stale permission. An accepted merge is a reviewed number, not a comment.
+#
+# `reason` is mandatory and pass 3 rejects it under 80 characters. Say which
+# BRANCH swallows which LINE and why bounding it was declined — not "known
+# issue".
+#
+# Do not add an entry to make a red build green. The two below are the residuals
+# this guard was built to expose, and each is a branch whose bound would cost
+# more than the merge does; a THIRD entry is a design change and needs the
+# argument that goes with one.
+
+go-stdlib:
+  expected: 2
+  reason: >-
+    Under log.SetFlags(0) the stdlib logger emits the bare message at column 0,
+    and two of this corpus' four lines then look exactly like the panic dump the
+    preset exists to join: the blank line hits `^$` and
+    `handler.ServeHTTP(GET /healthz)` hits `^\S+\.\S*\(.*\)$`, the unindented
+    frame branch. Neither branch can be bounded away without losing the panic:
+    `^$` is the blank line between `[signal SIGSEGV...]` and `goroutine 1
+    [running]:`, which is load-bearing and MUST join, and the frame branch is
+    the only thing that catches an unindented `main.main(...)`. go-stdlib emits
+    no severity at all, so the swallowed lines lose their text but no level —
+    this is the cheapest instance of the harm in the whole preset set, and
+    joining a real panic is worth more than splitting these two. Bounding the
+    frame branch to a `.go:NN` tail was probed and rejected: stdlib frames carry
+    the file on the NEXT line, not this one.
+
+zap-console:
+  expected: 4
+  reason: >-
+    Under a message-only EncoderConfig (TimeKey, LevelKey and NameKey all unset)
+    zap prints the bare message, and a message that is a single space-free
+    dotted token — `fixter-collector.service`, `/etc/fixter/config.yaml` — is
+    indistinguishable from the unindented `main.main` / `net/http.(*conn).serve`
+    frame lines zap's own stacktraces put at column 0. Two of this corpus' six
+    lines are such tokens and both join the record above. The branch is already
+    bounded to a space-free line (it was `^[^\t\n]*\.[\w*()]+$`, which swallowed
+    any prose ending in a filename — see the 05365d7 fix); tightening further
+    would have to require a `(`, and zap frames like `main.main` have none. The
+    residual is confined to messages with NO spaces, which is a small and
+    unusual shape for a log message, whereas dropping the branch fragments every
+    zap stacktrace at every unindented frame.

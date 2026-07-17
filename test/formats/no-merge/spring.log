@@ -1,0 +1,8 @@
+2026-07-16T09:00:00.000000000Z stdout F Started OrderApplication in 3.421 seconds (process running for 3.812)
+2026-07-16T09:00:01.000000000Z stdout F at capacity, rejecting request
+2026-07-16T09:00:02.000000000Z stdout F Tomcat started on port 8080
+2026-07-16T09:00:03.000000000Z stdout F Retrying connection to db-primary
+2026-07-16T09:00:04.000000000Z stdout F com.foo.OrderService: INFO  accepted order 4711
+2026-07-16T09:00:05.000000000Z stdout F com.foo.PaymentClient: WARN  retrying charge for order 4711
+2026-07-16T09:00:06.000000000Z stdout F com.foo.PaymentClient: ERROR gateway unreachable, giving up
+2026-07-16T09:00:07.000000000Z stdout F com.foo.OrderService: INFO  order 4711 settled

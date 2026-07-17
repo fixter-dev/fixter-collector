@@ -1,0 +1,5 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16 09:00:00.123 UTC [1] LOG:  database system is ready to accept connections
+2026-07-16T09:00:02.000000000Z stdout F 2026-07-16 09:00:01.456 UTC [42] ERROR:  relation "users" does not exist at character 15
+2026-07-16T09:00:03.000000000Z stdout F 2026-07-16 09:00:01.456 UTC [42] STATEMENT:  SELECT * FROM users
+2026-07-16T09:00:04.000000000Z stdout F 2026-07-16 09:00:02.789 UTC [43] WARNING:  there is no transaction in progress
+2026-07-16T09:00:05.000000000Z stdout F 2026-07-16 09:00:03.012 UTC [1] LOG:  checkpoint starting: time

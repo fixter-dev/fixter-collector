@@ -4,6 +4,7 @@ templates:
   - daemonset-agent.yaml
   - service-agent.yaml
   - secret.yaml
+  - NOTES.txt
 tests:
   - it: is a DaemonSet
     template: daemonset-agent.yaml
@@ -29,10 +30,6 @@ tests:
       fixter.apiKey: test-key-123
       agent.logs.excludeNamespaces: []
     asserts:
-      # Assert the own-pod pattern is the FIRST exclude entry, not merely
-      # present — the ordering (own pods before user excludes) is the contract.
-      # Allows the template's leading comment lines between `exclude:` and the
-      # first bullet, but no other bullet may come before the own-pod one.
       - matchRegex:
           path: data["config.yaml"]
           pattern: "exclude:\\s*\\n(\\s*#[^\\n]*\\n)*\\s*- /var/log/pods/\\*_RELEASE-NAME-fixter-collector"
@@ -67,10 +64,6 @@ tests:
       agent.otlpRelay: true
       agent.logs.enabled: true
     asserts:
-      # Pin otlp as the traces RECEIVER. A loose match falsely hits otlp_http on
-      # the exporters line (verified by mutation: passed with receivers: [BOGUS]).
-      # The traces pipeline renders its receivers in flow style (`[otlp]`)
-      # rather than block style (`- otlp`), so match either form.
       - matchRegex:
           path: data["config.yaml"]
           pattern: "traces:\\s*\\n\\s*receivers: \\[otlp\\]"
@@ -82,8 +75,6 @@ tests:
       agent.logs.enabled: true
       agent.otlpRelay: true
     asserts:
-      # The derive-service processor copies from the k8s attributes k8s_attributes
-      # already extracts, with a deployment -> container fallback for service.name.
       - matchRegex:
           path: data["config.yaml"]
           pattern: "resource/derive_service:"
@@ -96,12 +87,9 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "key: service.instance.id"
-      # It runs in BOTH the logs and metrics pipelines (self-scoping insert: infra
-      # metrics with no deployment just no-op through it).
       - matchRegex:
           path: data["config.yaml"]
           pattern: "processors: \\[memory_limiter, k8s_attributes, resource_detection, resource, resource/derive_service, batch\\]"
-      # Traces keep the original list — relayed traces always carry their own service.
       - matchRegex:
           path: data["config.yaml"]
           pattern: "traces:\\s*\\n\\s*receivers: \\[otlp\\]\\s*\\n\\s*processors: \\[memory_limiter, k8s_attributes, resource_detection, resource, batch\\]"
@@ -118,15 +106,18 @@ tests:
           path: data["config.yaml"]
           pattern: "/var/log/pods/istio-system_"
 
-  - it: drops the file_log receiver entirely when logs are disabled
+  - it: drops every file_log receiver entirely when logs are disabled
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
       agent.logs.enabled: false
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "file_log:"
+          pattern: "file_log/"
 
   - it: exposes OTLP http for app relay
     template: daemonset-agent.yaml
@@ -149,10 +140,6 @@ tests:
           path: spec.internalTrafficPolicy
           value: Local
 
-  # Regression: a non-root agent CANNOT read /var/log/pods on EKS (root-owned)
-  # and silently collects zero logs — file_log logs no error and the pod stays
-  # Ready. kind's perms are permissive so a smoke test cannot catch it. Verified
-  # on a real EKS node: as uid 10001, `ls /var/log/pods` -> Permission denied.
   - it: runs the agent as root so it can read root-owned pod logs
     template: daemonset-agent.yaml
     set:
@@ -165,14 +152,45 @@ tests:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: false
 
-  # ── log parsing: severity + multiline ──────────────────────────────────────
-  # The container operator only unwraps the CRI envelope; it never looks at the
-  # application's own line. Without the operators below, every log arrives with
-  # no severity and each stack-trace line becomes its own record.
-  - it: joins continuation lines so a stack trace is one record, not one per line
+  - it: the catch-all recombines only on ^\s and never guesses severity from text
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.formats: []
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "type: recombine"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\\"\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "body matches'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'default: parsed'
+
+  - it: the catch-all still detects JSON and glog structurally
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats: []
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "id: json-severity"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "id: glog-severity"
+
+  - it: a configured format still recombines
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
     asserts:
       - matchRegex:
           path: data["config.yaml"]
@@ -181,19 +199,13 @@ tests:
           path: data["config.yaml"]
           pattern: "combine_field: body"
 
-  # A source_identifier is not cosmetic: without it recombine interleaves lines
-  # from every pod on the node into one stream and stitches unrelated logs
-  # together.
-  #
-  # Keyed on path+STREAM, not path alone: CRI writes stdout and stderr
-  # interleaved into the same 0.log, so the path is not a stream. Verified
-  # against the real binary — with the path alone, a stderr traceback landed
-  # inside the preceding stdout INFO record and inherited Info(9), making the
-  # KeyError invisible to every severity>=ERROR filter.
   - it: recombines per file AND stream so stderr cannot land inside a stdout record
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
     asserts:
       - matchRegex:
           path: data["config.yaml"]
@@ -202,18 +214,17 @@ tests:
           path: data["config.yaml"]
           pattern: 'log.file.path"\] \+ "\|" \+ attributes\["log.iostream"\]'
 
-  # The safety valve for the recombine failure mode: an app whose lines never
-  # match firstEntryRegex would otherwise buffer forever into one giant entry.
   - it: bounds recombine so an unmatched format cannot buffer forever
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
     asserts:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "force_flush_period: 5s"
-      # Assert the VALUE, not just the key: a bare integer here renders through
-      # Helm as the float 1.048576e+06.
       - matchRegex:
           path: data["config.yaml"]
           pattern: "max_log_size: 1MiB"
@@ -236,20 +247,6 @@ tests:
           path: data["config.yaml"]
           pattern: "parse_from: attributes.level"
 
-  - it: falls back to a text severity regex for non-JSON logs
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "type: regex_parser"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "ERROR"
-
-  # A parser that hard-fails drops the log. An unrecognised format must degrade
-  # to "no severity", never to "no log".
   - it: never drops a log whose format neither parser recognises
     template: configmap-agent.yaml
     set:
@@ -259,61 +256,35 @@ tests:
           path: data["config.yaml"]
           pattern: "on_error: send_quiet"
 
-  - it: lets an operator override the continuation pattern for its own log format
+  - it: negates a format's continuation pattern so a line it does not know never globs
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.continuationRegex: "^CUSTOM-CONT"
+      agent.logs.formats:
+        - name: custom
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          continuationRegex: "^CUSTOM-CONT"
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "CUSTOM-CONT"
+          pattern: 'is_first_entry: "!\(body matches \\"\^CUSTOM-CONT\\"\)"'
 
-  # The direction is the whole safety property. is_first_entry must be the
-  # NEGATION of a continuation pattern: with the inverse ("this starts a record"),
-  # any format the pattern does not know has EVERY line treated as a continuation
-  # and unrelated events merge into one record. Verified against the real binary:
-  # the un-negated form turned 12 mixed-language lines into 5 records, gluing a
-  # .NET log onto the end of a Python traceback.
-  - it: negates the continuation pattern so an unknown format never globs
+  - it: double-escapes a format's continuation pattern so expr can compile it
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: custom
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          continuationRegex: '^\d{2}:\d{2}'
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: .!\(body matches'
-
-  # Regression: is_first_entry is an expr expression, so the pattern sits inside
-  # a string literal and each backslash must survive expr's unescape before the
-  # regex engine sees it. Emitting the raw pattern renders `\s`, which expr
-  # rejects at startup ("invalid char escape") — the collector then crashloops
-  # and the node ships NO logs at all. Caught only by running the rendered
-  # config; every string-presence assertion passed while it was broken.
-  - it: double-escapes the continuation pattern so expr can compile it
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'is_first_entry: .!\(body matches "\^\(\\\\s\|'
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\d\{2\}:\\\\\\\\d\{2\}\\"\)"'
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: .!\(body matches "\^\([^\\]\\s\|'
+          pattern: 'is_first_entry.*[^\\]\\\\d\{2\}'
 
-  - it: double-escapes an operator's custom pattern too
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-      agent.logs.parsing.continuationRegex: '^\d{2}:\d{2}'
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'is_first_entry: .!\(body matches "\^\\\\d\{2\}:\\\\d\{2\}"\)'
-
-  # pino/bunyan emit numeric levels. Unmapped they arrive as severity text "30"
-  # with SeverityNumber Unspecified(0) — parsed but useless.
   - it: maps numeric JSON levels so pino and bunyan get a real severity
     template: configmap-agent.yaml
     set:
@@ -326,41 +297,6 @@ tests:
           path: data["config.yaml"]
           pattern: "error: 50"
 
-  # Serilog's "[09:00:03 INF]" captures INF, which is not a severity name stanza
-  # knows — without the mapping it yields SeverityNumber Unspecified(0). Same for
-  # ClickHouse's <Information>/<Notice>, MySQL's [Note]/[System] and Postgres'
-  # LOG:/PANIC.
-  - it: maps vendor level names so Serilog, ClickHouse, MySQL and Postgres resolve
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'info: \["inf","information","notice","note","system","log:"\]'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'fatal: \["crit","critical","panic"\]'
-
-  # Regression: rendering the mapping with `join` leaves values unquoted, and an
-  # unquoted `log:` inside a YAML flow sequence parses as a nested MAP — the
-  # collector then refuses to start with "type map[string]interface {} cannot be
-  # parsed as a severity" and the node ships NO logs. yq hides this by re-quoting
-  # on display; only the raw text and the real binary show it.
-  - it: quotes severity mapping values so a trailing colon cannot become a map
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: '"log:"'
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: '\[[^]"]*log:\]'
-
-  # glog encodes severity as a single leading letter (Doris BE: "I0716 ..."). No
-  # word-based regex can reach it, so it gets its own route.
   - it: routes glog logs so Doris BE gets a severity
     template: configmap-agent.yaml
     set:
@@ -371,16 +307,16 @@ tests:
           pattern: "id: glog-severity"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'body matches "\^\[IWEF\]\\\\d\{4\} "'
+          pattern: 'body matches \\"\^\[IWEF\]\\\\\\\\d\{4\} \\"'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'error: \["e"\]'
 
-  - it: can turn the glog route off without touching the other paths
+  - it: can turn the glog route off without touching the JSON route
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.glog.enabled: false
+      agent.logs.structural.glog.enabled: false
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
@@ -388,120 +324,56 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "id: json-severity"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "id: text-severity"
-
-  # `\d+\.\s` would catch ClickHouse's numbered frames, but it also swallowed
-  # "1. Check that the database is reachable" and every line of a locale-formatted
-  # JVM log ("2026. 7. 16." under ko_KR, which glued each message to the NEXT
-  # record's header). Swallowing a real log line is worse than splitting a trace,
-  # so ClickHouse frames are left to split. Same reasoning killed `at\s`, which
-  # swallowed "at capacity, rejecting request".
-  - it: does not swallow numbered or at-prefixed lines that are real log records
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: 'is_first_entry.*\\\\d\+\\\\\.\\\\s'
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: 'is_first_entry.*\|at\\\\s\|'
-
-  # panic: is the HEAD of a Go panic, not a continuation. Listed as one, it merged
-  # the crash BACKWARDS into the preceding line and reported the whole thing at
-  # that line's severity — a Go crash arriving as Info(9). Omitted, it starts its
-  # own record (Fatal(21)) and `goroutine \d` attaches the dump.
-  - it: "does not treat panic: as a continuation, so a Go crash is not merged backwards"
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: 'is_first_entry.*\|panic:\|'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'goroutine \\\\d'
-
-  # A Go stack frame's function line sits UNINDENTED between the indented
-  # file:line rows, so the whitespace rule misses it and panics fragment. Every
-  # Kubernetes controller is Go, so this is the common multi-line case in-cluster.
-  # Anchored to a closing paren at end-of-line so an ordinary message that merely
-  # opens with a call ("Reconciler.Run(ctx) failed") is not swallowed.
-  - it: treats Go stack frame function lines as continuations
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'created by \\\\S'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: '\\\\S\+\\\\\.\\\\w\+\\\\\(\[\^\)\]\*\\\\\)\$'
-
-  - it: recognises database level words in the text severity pattern
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      # Postgres LOG keeps its colon: bare "LOG" is too generic and would tag any
-      # line mentioning a log file.
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "LOG:"
-      # Longest-first, or INFO would consume the start of INFORMATION.
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'INFORMATION\\b\|INFO\\b\|INF\\b'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'DEBUG\[1-5\]\\b\|DEBUG\\b'
-
-  # Python's default asctime is "2026-07-16 09:00:02,124" — date and time split
-  # by a space — so an ISO-anchored `^\S+\s+LEVEL` never reaches the level.
-  - it: does not anchor text severity to an ISO timestamp
-    template: configmap-agent.yaml
-    set:
-      fixter.apiKey: test-key-123
-    asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: '\(\?i\)\^\.\{0,48\}\?'
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: 'severityRegex.*\^\\\\S\+\\\\s\+'
 
   - it: lets an operator override the JSON severity field
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.json.severityField: severity_text
+      agent.logs.structural.json.severityField: severity_text
     asserts:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "parse_from: attributes.severity_text"
 
+  - it: extracts trace context from a JSON log so logs correlate to traces
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\n        trace:\n          trace_id:\n            parse_from: attributes\\.trace_id\n          span_id:\n            parse_from: attributes\\.span_id\n          trace_flags:\n            parse_from: attributes\\.trace_flags\n"
+
+  - it: lets an operator override the JSON trace fields
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.structural.json.traceIdField: traceId
+      agent.logs.structural.json.spanIdField: spanId
+      agent.logs.structural.json.traceFlagsField: traceFlags
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\n        trace:\n          trace_id:\n            parse_from: attributes\\.traceId\n          span_id:\n            parse_from: attributes\\.spanId\n          trace_flags:\n            parse_from: attributes\\.traceFlags\n"
+
   - it: can be turned off entirely, leaving only the container parser
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.enabled: false
+      agent.logs.structural.json.enabled: false
+      agent.logs.structural.glog.enabled: false
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "type: recombine"
+          pattern: "type: router"
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "type: router"
+          pattern: "type: json_parser"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "type: container"
 
-  - it: does not emit parsing operators when logs are disabled
+  - it: does not emit any log receiver when logs are disabled
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
@@ -509,37 +381,553 @@ tests:
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "type: recombine"
+          pattern: "type: container"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/default:"
 
-  - it: maps JSON trace context onto the log record so logs correlate to traces
+  - it: survives a double-quote in a format's continuation pattern
     template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: custom
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          continuationRegex: '^"quoted'
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\"quoted\\"\)"'
+
+  - it: survives an apostrophe in a format's severity pattern
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: custom
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          severityRegex: "it's"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "it''s"'
+
+  - it: quotes json severity mapping values like the glog path does
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.structural.json.severityMapping.info: "custom:log"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '"custom:log"'
+
+  - it: rejects a stale agent.logs.parsing block rather than ignoring it
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.parsing.text.severityRegex: "(?P<severity>[A-Z]+)"
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.parsing was removed in chart 0.2.0. Helm ignores unknown keys silently, so leaving it there would drop your overrides without a word and cost you the severities you believe you are setting. Migrate it: agent.logs.parsing.json -> agent.logs.structural.json, and agent.logs.parsing.glog -> agent.logs.structural.glog (behaviour unchanged, both on by default). agent.logs.parsing.text and agent.logs.parsing.continuationRegex are gone entirely — they applied one universal parser to every pod, which mislabelled severity (an ERROR from a service named `trace-service` arrived as Trace(1)). Add an agent.logs.formats entry with the matching preset for each text-logging workload instead. See the 0.1.x -> 0.2.0 migration note in the README.'
+
+  - it: rejects an emptied parsing block even with logs disabled
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.enabled: false
+      agent.logs.parsing: {}
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.parsing was removed in chart 0.2.0. Helm ignores unknown keys silently, so leaving it there would drop your overrides without a word and cost you the severities you believe you are setting. Migrate it: agent.logs.parsing.json -> agent.logs.structural.json, and agent.logs.parsing.glog -> agent.logs.structural.glog (behaviour unchanged, both on by default). agent.logs.parsing.text and agent.logs.parsing.continuationRegex are gone entirely — they applied one universal parser to every pod, which mislabelled severity (an ERROR from a service named `trace-service` arrived as Trace(1)). Add an agent.logs.formats entry with the matching preset for each text-logging workload instead. See the 0.1.x -> 0.2.0 migration note in the README.'
+
+  - it: renders one receiver per configured format
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          severityRegex: '^\S+ \S+ +(?P<severity>[A-Z]+) '
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/spring:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/default:"
+
+  - it: excludes every format glob from the catch-all so no file is read twice
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
+        - name: clickhouse
+          include: ["/var/log/pods/clickhouse_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/default:[\s\S]*exclude:[\s\S]*/var/log/pods/prod_\*/\*/\*.log'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/default:[\s\S]*exclude:[\s\S]*/var/log/pods/clickhouse_\*/\*/\*.log'
+
+  - it: wires every format receiver into the logs pipeline
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:[\\s\\S]*receivers:[\\s\\S]*- file_log/spring"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:[\\s\\S]*receivers:[\\s\\S]*- file_log/default"
+
+  - it: gives earlier formats precedence so overlapping globs never double-read
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: narrow
+          include: ["/var/log/pods/prod_api_*/*/*.log"]
+        - name: broad
+          include: ["/var/log/pods/prod_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/broad:\n\s+include:\n\s+- "[^"]*"\n\s+exclude:\n(\s+#[^\n]*\n)*\s+- "/var/log/pods/prod_api_\*/\*/\*\.log"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/narrow:[\s\S]*?exclude:[\s\S]*?file_log/broad:'
+
+  - it: rejects duplicate format names instead of shipping a crash-loop
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/a_*/*/*.log"]
+        - name: spring
+          include: ["/var/log/pods/b_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'duplicate agent.logs.formats name "spring". Each name becomes a file_log/<name> receiver key, so duplicates render the same YAML key twice and the collector crash-loops with `mapping key "file_log/spring" already defined`. Give each format a unique name.'
+
+  - it: rejects identical include globs instead of shipping a dead format
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/a_*/*/*.log"]
+        - name: quarkus
+          include: ["/var/log/pods/a_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.formats "spring" and "quarkus" have identical include globs ["/var/log/pods/a_*/*/*.log"]. Earlier formats take precedence, so "quarkus" is excluded from every file it asks for and can never collect anything — its operators would never run. Remove "quarkus", or narrow its globs so it claims files "spring" does not.'
+
+  - it: rejects identical include globs regardless of their order
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: spring
+          include: ["/var/log/pods/a_*/*/*.log", "/var/log/pods/b_*/*/*.log"]
+        - name: quarkus
+          include: ["/var/log/pods/b_*/*/*.log", "/var/log/pods/a_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.formats "spring" and "quarkus" have identical include globs ["/var/log/pods/a_*/*/*.log","/var/log/pods/b_*/*/*.log"]. Earlier formats take precedence, so "quarkus" is excluded from every file it asks for and can never collect anything — its operators would never run. Remove "quarkus", or narrow its globs so it claims files "spring" does not.'
+
+  - it: rejects a format with no include globs
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.formats "clickhouse" has no include globs. Every format needs its own `include`: a preset supplies the parser, never the location. Without it the receiver renders `include: null` and the collector refuses to start with `failed to create "file_log/clickhouse" receiver ... ''include'' must be specified` — the agent DaemonSet crash-loops and the node ships no logs at all, for any workload. Set include to the log paths this format claims, e.g. include: ["/var/log/pods/<namespace>_<pod>-*/*/*.log"].'
+
+  - it: rejects a format with an empty include list
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: myapp
+          include: []
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.formats "myapp" has no include globs. Every format needs its own `include`: a preset supplies the parser, never the location. Without it the receiver renders `include: null` and the collector refuses to start with `failed to create "file_log/myapp" receiver ... ''include'' must be specified` — the agent DaemonSet crash-loops and the node ships no logs at all, for any workload. Set include to the log paths this format claims, e.g. include: ["/var/log/pods/<namespace>_<pod>-*/*/*.log"].'
+
+  - it: rejects a firstEntryRegex beside a preset's continuationRegex
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          firstEntryRegex: '^\d{4}-'
+    asserts:
+      - failedTemplate:
+          errorMessage: 'a log format sets both firstEntryRegex and continuationRegex; they are two directions of the same predicate and recombine takes only one. firstEntryRegex wins outright, so the continuationRegex beside it is dead config that silently does nothing — and a rule you believe is joining your stack traces, but is not, is exactly the failure this chart fails the template to prevent. Set exactly one. If you set firstEntryRegex on a format whose preset ships a continuationRegex, also set continuationRegex to null to drop it — but note firstEntryRegex is the UNSAFE direction: a line it does not match is appended to the record above, so a pattern that misses your format merges the entire stream into one record and stamps it with the first line''s severity. A too-narrow continuationRegex fragments instead, which is recoverable — but a too-BROAD one merges just as badly, so bound whichever you set. See agent.logs.presets in values.yaml.'
+
+  - it: allows a firstEntryRegex when the preset's continuationRegex is dropped
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_*/*/*.log"]
+          continuationRegex: null
+          firstEntryRegex: '^\d{4}-'
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "body matches \\"\^\\\\\\\\d\{4\}-\\""'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/spring:[\s\S]*?is_first_entry: "!\([\s\S]*?file_log/default:'
+
+  - it: allows overlapping but distinct include globs
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: narrow
+          include: ["/var/log/pods/prod_api_*/*/*.log"]
+        - name: broad
+          include: ["/var/log/pods/prod_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/narrow:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/broad:"
+
+  - it: renders only the catch-all when no formats are configured
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats: []
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/default:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/spring:"
+
+  - it: expands a preset into a full format receiver
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+          include: ["/var/log/pods/clickhouse_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/clickhouse:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\\\\\\\\d\+\\\\\\\\\.\\\\\\\\s\\"\)"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["critical"\]'
+
+  - it: lets a format override a preset field
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+          include: ["/var/log/pods/ch_*/*/*.log"]
+          severityRegex: "CUSTOM(?P<severity>x)"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "CUSTOM\(\?P<severity>x\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: '<\(\?P<severity>\[A-Za-z\]\+\)>'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["critical"\]'
+
+  - it: lets a format clear a preset's mapping with an empty value
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+          include: ["/var/log/pods/ch_*/*/*.log"]
+          severityMapping: {}
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["critical"\]'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+
+  - it: parses logfmt structurally, never with a regex over level=
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: logfmt
+          include: ["/var/log/pods/gokit_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'type: key_value_parser\n +id: format-severity\n +parse_from: body\n +parse_to: attributes\n +on_error: send_quiet\n +severity:\n +parse_from: attributes\.level'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "level='
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/logfmt:[\s\S]*?type: recombine[\s\S]*?file_log/default:'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/logfmt:[\s\S]*?is_first_entry[\s\S]*?file_log/default:'
+
+  - it: rejects a format that sets both severityKey and severityRegex
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: logfmt
+          include: ["/var/log/pods/gokit_*/*/*.log"]
+          severityRegex: "lvl=(?P<severity>x)"
+    asserts:
+      - failedTemplate:
+          errorMessage: 'a log format sets both severityKey and severityRegex; they are two different parsers for the same field and only one can run. severityKey parses the line as key=value pairs (key_value_parser); severityRegex pattern-matches it (regex_parser). Set exactly one. If you set severityKey on a format whose preset ships a severityRegex (or vice versa), also set the other to null to drop it.'
+
+  - it: lets severityKey be cleared to null to fall back to a regex
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: logfmt
+          include: ["/var/log/pods/gokit_*/*/*.log"]
+          severityKey: null
+          severityRegex: "lvl=(?P<severity>x)"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "lvl=\(\?P<severity>x\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'type: key_value_parser'
+
+  - it: maps .NET's fail to error and crit to fatal
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: dotnet
+          include: ["/var/log/pods/api_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'error: \["fail"\]'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["crit"\]'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\\"\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*trce\|dbug'
+
+  - it: gives go-stdlib a recombine and no severity parser at all
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: go-stdlib
+          include: ["/var/log/pods/op_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\".*\|\^created by \\\\\\\\S\|'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\|\^\\\\\\\\S\+\\\\\\\\\.\\\\\\\\S\*\\\\\\\\\(\.\*\\\\\\\\\)\$\\"\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*panic'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'id: format-severity'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'type: recombine'
+
+  - it: anchors zap-console on its stack-frame shape, not on its record header
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: zap-console
+          include: ["/var/log/pods/svc_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\[\\\\\\\\w\*\(\)\./\\\\\\\\\[\\\\\\\\\]-\]\+\\\\\\\\\.\[A-Za-z_\*\(\]\[\\\\\\\\w\*\(\)\./\\\\\\\\\[\\\\\\\\\]-\]\*\$\\"\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*DPANIC'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "\^\[\^\\\\t\\\\n\]\+\\\\t\(\?P<severity>'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["dpanic","panic"\]'
+
+  - it: anchors python on its traceback shape so a traceback joins
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: python
+          include: ["/var/log/pods/worker_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\$\|\^Traceback '
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\|\^During handling of the above exception\|\^The above exception was the direct cause\|'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\|\^\[A-Za-z_\]\\\\\\\\w\*\(\?:Error\|Exception\|Interrupt\|Exit\|Iteration\|Warning\|Group\)\(\?::\|\$\)\\"\)"'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'is_first_entry.*CRITICAL'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "\^\(\?:\\\\d\{4\}-.*\(\?:\[,\.\]\\\\d\{3\}\)\? \(\?:- \[\^\\\\s\]\+ - \)\?\)\?\(\?P<severity>CRITICAL'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fatal: \["critical"\]'
+
+  - it: fails loudly on an unknown preset rather than rendering a silent no-op
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: nope
+          include: ["/var/log/pods/x_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'unknown log format preset "nope". Available presets: clickhouse, doris-fe, dotnet, go-stdlib, logfmt, mysql, postgres, python, spring, zap-console.'
+
+  - it: wires a preset-only format into the pipeline under the preset name
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+          include: ["/var/log/pods/clickhouse_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '\n    logs:\n      receivers:\n        - file_log/clickhouse\n        - file_log/default\n'
+
+  - it: rejects two entries using the same preset as duplicate names
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: clickhouse
+          include: ["/var/log/pods/a_*/*/*.log"]
+        - preset: clickhouse
+          include: ["/var/log/pods/b_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'duplicate agent.logs.formats name "clickhouse". Each name becomes a file_log/<name> receiver key, so duplicates render the same YAML key twice and the collector crash-loops with `mapping key "file_log/clickhouse" already defined`. Give each format a unique name.'
+
+  - it: allows two entries to share a preset when each is named
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - name: ch-prod
+          preset: clickhouse
+          include: ["/var/log/pods/a_*/*/*.log"]
+        - name: ch-staging
+          preset: clickhouse
+          include: ["/var/log/pods/b_*/*/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/ch-prod:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "file_log/ch-staging:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/ch-prod:[\s\S]*?regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"[\s\S]*?file_log/ch-staging:[\s\S]*?regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+
+  - it: fails loudly when a format has neither a name nor a preset
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - include: ["/var/log/pods/x_*/*/*.log"]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'agent.logs.formats[0] has no name. Set name, or set preset to take the name from the preset.'
+
+  - it: warns on install when logs are on and no format is configured
+    template: NOTES.txt
     set:
       fixter.apiKey: test-key-123
     asserts:
       - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'trace:\s*\n\s*trace_id:\s*\n\s*parse_from: attributes\.trace_id'
+          path: raw
+          pattern: 'NOTE: agent\.logs\.formats is empty'
       - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'span_id:\s*\n\s*parse_from: attributes\.span_id'
+          path: raw
+          pattern: 'ONE RECORD PER LINE with NO severity'
       - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'trace_flags:\s*\n\s*parse_from: attributes\.trace_flags'
+          path: raw
+          pattern: '2-3x rise in record count'
+      - matchRegex:
+          path: raw
+          pattern: 'Presets available: clickhouse, doris-fe, dotnet, go-stdlib, logfmt, mysql, postgres, python, spring, zap-console\.'
 
-  - it: honours overridden JSON trace field names
-    template: configmap-agent.yaml
+  - it: does not warn about formats when a format is configured
+    template: NOTES.txt
     set:
       fixter.apiKey: test-key-123
-      agent.logs.parsing.json.traceIdField: traceId
-      agent.logs.parsing.json.spanIdField: spanId
-      agent.logs.parsing.json.traceFlagsField: traceFlags
+      agent.logs.formats:
+        - preset: spring
+          include: ["/var/log/pods/prod_api_*/*/*.log"]
     asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'parse_from: attributes\.traceId'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'parse_from: attributes\.spanId'
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: 'parse_from: attributes\.traceFlags'
+      - notMatchRegex:
+          path: raw
+          pattern: 'NOTE: agent\.logs\.formats is empty'
+
+  - it: does not warn about formats when log collection is off
+    template: NOTES.txt
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: raw
+          pattern: 'NOTE: agent\.logs\.formats is empty'

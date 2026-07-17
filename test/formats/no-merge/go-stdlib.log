@@ -1,0 +1,4 @@
+2026-07-16T09:00:00.000000000Z stderr F starting order-service
+2026-07-16T09:00:01.000000000Z stderr F 
+2026-07-16T09:00:02.000000000Z stderr F listening on :8080
+2026-07-16T09:00:03.000000000Z stderr F handler.ServeHTTP(GET /healthz)

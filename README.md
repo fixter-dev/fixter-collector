@@ -109,55 +109,218 @@ Or disable pod log collection entirely:
 ## Log severity and stack traces
 
 Pod log lines carry no severity, and a stack trace arrives as one line per
-frame. The agent derives both: JSON bodies take their level from the `level`
-field (string *or* numeric, so pino and bunyan work); anything else falls back
-to a regex over the text. Stack frames and other continuation lines are joined
-onto the record above.
+frame. What the agent can do about that depends on whether it knows the format.
 
-Verified against real output from these formats:
+**Out of the box** it reads only what a line's own SHAPE reveals, with no
+guessing:
 
-| Format | Record boundaries | Severity |
+| Format | Severity | Record boundaries |
 | --- | --- | --- |
-| JSON, string level (zap, winston, logback) | yes | yes |
-| JSON, numeric level (pino, bunyan) | yes | yes |
-| Java / Spring (logback default) | yes | yes |
-| Python (`logging` default) | yes | yes |
-| Go (logrus text, logfmt) | yes | yes |
-| Go (`log` stdlib) | yes | no level in the line to find |
-| .NET (default console, Serilog) | yes | yes |
-| glog / klog — Doris BE, Kubernetes components | yes | yes |
-| CoreDNS (`[INFO]`, `[ERROR]`) | yes | yes |
-| Go panics / Kubernetes controller stacks | yes | yes |
-| PostgreSQL (`LOG:`, `ERROR:`, `FATAL:`, …) | yes | yes |
-| MySQL (`[System]`, `[Note]`, `[Warning]`, `[ERROR]`) | yes | yes |
-| Doris FE (log4j) | yes | yes |
-| ClickHouse (`<Information>`, `<Error>`, … + numbered stack frames) | yes | yes |
+| JSON, string level (zap, winston, logback) | yes — from the `level` field | one per line, which is correct for JSON |
+| JSON, numeric level (pino, bunyan) | yes — `10`…`60` are mapped | as above |
+| glog / klog — Doris BE, every Kubernetes component | yes — from the `I`/`W`/`E`/`F` prefix | one per line |
+| **any other text format** | **none** | **one per line** |
 
-Both paths are best-effort. A format neither recognises still ships — it just
-arrives without a severity. **Nothing is ever dropped for being unparseable.**
+That last row is deliberate, and it is the honest answer rather than a
+limitation to work around. The catch-all reads files whose format it does not
+know, so it cannot find a level word without guessing at where one sits — and
+guessing gets it wrong in both directions: a positional search read a service
+named `trace-service` as TRACE, and a 200-OK nginx line containing `/error/` as
+ERROR. **A wrong severity is worse than none: it is invisible to alerting either
+way, but it also lies.** For the same reason it never joins continuation lines:
+the multiline engine takes a single predicate with no "neither" state, so on an
+unrecognised format it merges *unrelated events* into one record. A split stack
+trace is recoverable; a merged one, or a lie, is not.
 
-### Tuning it
+**Nothing is ever dropped for being unparseable** — an unrecognised line still
+ships, just without a severity.
+
+### Telling it a format, with `formats`
+
+To get severity and stack traces from a text format, point a format at the pods
+that emit it. Inside a format-scoped receiver the format is *known*, so its
+pattern is anchored to that format's own structure and cannot be fooled:
 
 ```yaml
 agent:
   logs:
-    parsing:
-      # A line matching this CONTINUES the record above; anything else starts a
-      # new one. Covers indented frames plus `Caused by:`, `at `, tracebacks,
-      # `panic:`, and exception-class lines.
-      continuationRegex: '^(\s|Caused by:|at\s|panic:|...)'
-      json:
-        severityField: level      # e.g. severity_text, levelname
-      text:
-        severityRegex: '(?i)^.{0,48}?\b(?P<severity>TRACE\b|DEBUG\b|INFO\b|...)'
-      glog:
-        enabled: true             # Doris BE and other glog users ("I0716 ...")
+    formats:
+      - preset: spring
+        include: ["/var/log/pods/prod_*/*/*.log"]
+      - preset: clickhouse
+        include: ["/var/log/pods/clickhouse_*/*/*.log"]
+      - preset: postgres
+        include: ["/var/log/pods/*_postgres-*/*/*.log"]
 ```
 
-Levels that are not one of the six OTel names — Serilog's `INF`, ClickHouse's
-`<Information>`, MySQL's `[Note]`, Postgres' `LOG:`, pino's numeric `30` — are
-resolved through `severityMapping` under each path. Add your own there rather
-than widening the regex.
+Built-in presets:
+
+| preset | reads |
+| --- | --- |
+| `spring` | Spring Boot 2.x and 3.x |
+| `clickhouse` | ClickHouse server |
+| `postgres` | PostgreSQL (`log_line_prefix` default, and `%q%u@%d`) |
+| `mysql` | MySQL 8 error log |
+| `doris-fe` | Doris FE (Doris BE is glog — no preset needed) |
+| `logfmt` | any `key=value` line — go-kit, logrus' default non-TTY mode, Go's `log/slog` `TextHandler` |
+| `python` | `logging.basicConfig()`'s default, plus the two common `%(asctime)s` overrides |
+| `dotnet` | the default console logger (`Simple`), including its two-line events |
+| `go-stdlib` | Go's standard-library `log` — **joins records only, no severity** |
+| `zap-console` | zap's console encoder (`zap.NewDevelopment()`) |
+
+Each is covered by a regression test that builds the chart's own receiver over a
+corpus and checks the record count and the {body, severity} pair of every record
+it produces (`go test ./test/formats`; see `test/formats/README.md` for exactly
+what that does and does not prove — the `doris-fe` and `logfmt` corpora are written from
+those formats' documented default patterns and the `dotnet` one from the .NET
+runtime's formatter source, rather than captured from a running emitter; the rest
+are real output). A format entry sets
+`preset: <name>` plus `include`; any other key you set on the entry overrides
+the preset's, so a preset is a starting point rather than a cage.
+
+**Selection is by log file path** — `/var/log/pods/<namespace>_<pod>_<uid>/<container>/0.log` —
+because that is the only thing available at parse time. Pod labels and
+annotations are **not** usable here: they arrive via `k8s_attributes`, which is a
+*processor* and runs after the receiver has already parsed the line. (Vector has
+the identical constraint.) So a format is targeted by namespace, pod-name prefix
+or container, as above.
+
+**Order matters — first match wins.** Each format automatically excludes the
+globs of every format declared before it, so a file matching several formats is
+read only by the earliest one. Put narrow formats before broad ones: a broad
+`prod_*` ahead of a specific `prod_api_*` swallows the API pods and the narrow
+format below it goes dead, silently.
+
+Every format's globs are also excluded from the catch-all automatically, so no
+file is ever read twice. **Do not add those excludes by hand** — that is the
+chart's job, and two receivers reading one file duplicates every record and
+doubles the ingest bill.
+
+A format with no preset spells it out itself:
+
+```yaml
+      - name: myapp
+        include: ["/var/log/pods/myapp_*/*/*.log"]
+        continuationRegex: '^(\s|Caused by:|\.\.\.\s\d+\smore)'
+        severityRegex: '^\S+ \S+ +(?P<severity>[A-Z]+) '
+        severityMapping: {}
+```
+
+Levels that are not one of the six OTel names — ClickHouse's `<Information>`,
+MySQL's `[Note]`, Postgres' `LOG`, pino's numeric `30` — are resolved through
+`severityMapping`. Add your own there rather than widening the regex.
+
+`firstEntryRegex` and `continuationRegex` are the two directions of one
+predicate — a record's START, or a line that CONTINUES the record above.
+Recombine takes only one, so setting both is rejected at template time rather
+than silently ignoring one; note every preset that recombines already ships a
+`continuationRegex`, so `preset: <name>` plus your own `firstEntryRegex` trips
+that rejection. Set `continuationRegex: null` to replace a preset's predicate.
+(`logfmt` is the exception: it ships neither, being one-line by construction.)
+
+**Describe the continuation, not the record start — and bound it.** Recombine has
+no third state, so every line the predicate does not match is appended to the
+record above. A predicate can be wrong two ways, and the direction only helps
+with one of them:
+
+| | pattern fits | pattern too **narrow** | pattern too **broad** |
+| --- | --- | --- | --- |
+| `firstEntryRegex` | joins correctly | **nothing starts a record — the entire stream merges into one blob, stamped with the first line's severity** | fragments: ordinary lines each start a record |
+| `continuationRegex` | joins correctly | fragments: one record per line | **ordinary lines are swallowed into the record above — the same merge, the same destroyed data** |
+
+Splitting a record is recoverable — you read two records instead of one, and
+every line keeps its own severity. Merging unrelated events is not: the lines
+are concatenated into a neighbour and an ERROR disappears inside an INFO,
+invisible to every alert.
+
+`continuationRegex` is the direction to reach for because a pattern goes
+**narrow on its own** — someone changes a log-format setting you never see —
+while it only goes **broad if you write it broad**, in review, where it can be
+caught. That is the whole argument. It is not that continuation cannot destroy
+data: a too-broad continuation destroys it exactly as thoroughly. Three presets
+here shipped that bug (an unbounded dotted-identifier branch merged the whole
+stream under a logger-first layout) and it was caught by a corpus, not by the
+direction. Bound your pattern to shapes your format's *runtime* emits — a stack
+frame, a chained-cause header, an exception-suffixed class name — never to
+something as open as "an identifier at column 0".
+
+This is not theoretical, and it is why every preset changed direction in 0.2.0.
+A format-scoped receiver knows the *software*, not the software's *log-format
+configuration* — and every format has a knob that moves its record start
+(Spring's `logging.pattern.dateformat`, Postgres' `log_line_prefix`, Python's
+`datefmt=`, Go's `log.SetFlags`, .NET's `TimestampFormat`) while none of them
+moves its *continuation* shape, because stack frames come from the language
+runtime rather than the log config. Measured on the real binary: `preset: spring`
+against a Boot app setting `logging.pattern.dateformat` turned three independent
+events into **one** record under `Info(9)`, hiding an ERROR. The continuation is
+the stable half of a format; anchor to it.
+
+Two more per-format keys bound the recombine (both apply only when the format
+recombines at all):
+
+| key | default | what it does |
+| --- | --- | --- |
+| `forceFlushPeriod` | `5s` | How long an unterminated record may stay open before it is emitted anyway. Raise it if a slow stack trace is being cut in half; lower it to reduce the lag before a record reaches Fixter. |
+| `maxLogSize` | `1MiB` | Size cap on one recombined record. A record hitting it is flushed as-is, so a runaway trace cannot grow without bound. |
+
+#### Python, .NET and Go
+
+These three fragmented worst — a Python traceback or a Go panic became one
+severity-less record per line — so each now has a preset:
+
+```yaml
+agent:
+  logs:
+    formats:
+      - preset: python
+        include: ["/var/log/pods/*_worker-*/*/*.log"]
+      - preset: dotnet
+        include: ["/var/log/pods/*_api-*/*/*.log"]
+      - preset: go-stdlib
+        include: ["/var/log/pods/*_operator-*/*/*.log"]
+```
+
+- **`python`** reads `logging.basicConfig()`'s default (`ERROR:__main__:msg`),
+  and joins the `Traceback`/`File`/`KeyError: 'id'` lines under it into one
+  record — including that last line, which is *not* indented. It also reads the
+  two common `%(asctime)s` overrides (`... - name - ERROR - msg` and
+  `... ERROR msg`). A `format=` with **neither** a leading level **nor** a
+  leading timestamp is not covered.
+- **`dotnet`** reads the default console logger, whose event is *two* lines
+  (`fail: Category[1]` then a six-space-indented message) — so it fixes a
+  fragmentation that exists even without a stack trace. All six levels are
+  mapped, including `fail` → Error and `crit` → Fatal.
+- **`go-stdlib`** reads Go's standard-library `log` (`2026/07/16 09:00:00 msg`)
+  and **reports no severity at all** — stdlib `log` emits no level, so there is
+  nothing to read and this preset does not invent one. It is still worth
+  enabling: it keeps `panic:` + the `[signal ...]` line + the `goroutine` dump in
+  **one** record, instead of one record per line for you to reassemble by eye.
+  It joins on the *panic dump's* shape, so `panic:` itself starts a record rather
+  than merging backwards into the log line above it and inheriting its identity.
+- **`zap-console`** reads zap's console encoder, joining on its *stack-frame*
+  shape. Every field of a record header here is an `EncoderConfig` knob — the
+  level's case and the timestamp's format both vary with the config, and dropping
+  the time encoder removes the timestamp altogether — whereas
+  `zapcore.NewStacktrace` emits frames the same way regardless.
+
+**Most Go logging needs no preset at all**, because its default is already
+structured and is read structurally:
+
+| library | default output | covered by |
+| --- | --- | --- |
+| `log/slog` (`JSONHandler`), zap (`NewProduction`), zerolog | JSON | structural JSON — nothing to configure |
+| `log/slog` (`TextHandler`), logrus (non-TTY), go-kit | logfmt | `preset: logfmt` |
+| stdlib `log` | `2026/07/16 09:00:00 msg` | `preset: go-stdlib` (joining only) |
+| zap console encoder | tab-delimited | `preset: zap-console` |
+
+**Not covered: zerolog's `ConsoleWriter`.** It colorizes by default *even when
+stdout is redirected*, so real container output wraps the level in ANSI escapes
+(`\x1b[32mINF\x1b[0m`) — and zerolog's own default is JSON, which already
+resolves structurally. Use the default; don't put `ConsoleWriter` in production.
+logrus with colors forced on is unread for the same reason.
+
+Emitting JSON or logfmt is still the better fix for any service you control —
+both are read structurally, with no glob to maintain.
 
 There is no AWS log support because there is nothing to support: the distro
 builds no AWS receivers (`filelog`, `hostmetrics`, `k8scluster`, `kubeletstats`,
@@ -187,24 +350,11 @@ Karpenter and external-dns are the ones usually worth having: they explain node
 provisioning and DNS changes, which is exactly what you want when scheduling
 misbehaves.
 
-Note the direction: the pattern describes a **continuation**, not a record
-start. That is deliberate. With the inverse, any format the pattern doesn't
-recognise has *every* line treated as a continuation, and unrelated log events
-get merged into one record. Detecting continuations fails the safe way — an
-unknown format degrades to one-record-per-line, which is just the status quo.
-Splitting a record is recoverable; merging unrelated events is not.
-
-`forceFlushPeriod` (5s) and `maxLogSize` (1MiB) bound how long a record can be
-held open.
-
-The text severity regex is a heuristic: it looks for a level word within the
-first 48 characters, so a message merely *containing* "error" further along
-isn't misread. It can still be fooled — set your own pattern if that matters.
-
-Or leave logs raw and unparsed:
+Or leave logs entirely raw — no severity at all, not even the structural ones:
 
 ```bash
---set agent.logs.parsing.enabled=false
+--set agent.logs.structural.json.enabled=false \
+--set agent.logs.structural.glog.enabled=false
 ```
 
 ## Bring your own Secret

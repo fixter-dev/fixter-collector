@@ -1,0 +1,6 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16 09:00:00 INFO  Worker pool started with 8 threads
+2026-07-16T09:00:02.000000000Z stderr F Traceback (most recent call last):
+2026-07-16T09:00:03.000000000Z stdout F 2026-07-16 09:00:00 INFO  Handling request GET /healthz
+2026-07-16T09:00:04.000000000Z stderr F   File "/app/main.py", line 10, in handler
+2026-07-16T09:00:05.000000000Z stderr F     return payload["id"]
+2026-07-16T09:00:06.000000000Z stderr F KeyError: 'id'

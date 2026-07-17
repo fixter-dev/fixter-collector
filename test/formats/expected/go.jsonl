@@ -1,0 +1,5 @@
+{"body":"2026-07-16 09:00:00 INFO  Reconciled deployment web-frontend successfully","severity":"Unspecified(0)"}
+{"body":"[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x4a1b2c]","severity":"Unspecified(0)"}
+{"body":"goroutine 42 [running]:","severity":"Unspecified(0)"}
+{"body":"main.(*Server).handle(0xc000123456, 0x0)\n\t/app/server.go:88 +0x2c","severity":"Unspecified(0)"}
+{"body":"panic: runtime error: invalid memory address or nil pointer dereference","severity":"Unspecified(0)"}

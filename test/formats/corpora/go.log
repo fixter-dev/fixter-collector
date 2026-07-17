@@ -1,0 +1,6 @@
+2026-07-16T09:00:01.000000000Z stdout F 2026-07-16 09:00:00 INFO  Reconciled deployment web-frontend successfully
+2026-07-16T09:00:02.000000000Z stderr F panic: runtime error: invalid memory address or nil pointer dereference
+2026-07-16T09:00:03.000000000Z stderr F [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x4a1b2c]
+2026-07-16T09:00:04.000000000Z stderr F goroutine 42 [running]:
+2026-07-16T09:00:05.000000000Z stderr F main.(*Server).handle(0xc000123456, 0x0)
+2026-07-16T09:00:06.000000000Z stderr F 	/app/server.go:88 +0x2c

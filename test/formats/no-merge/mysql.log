@@ -1,0 +1,3 @@
+2026-07-16T09:00:00.000000000Z stderr F 2026-07-16  9:00:00 0 [Note] InnoDB: Buffer pool(s) load completed
+2026-07-16T09:00:01.000000000Z stderr F 2026-07-16  9:00:01 0 [Warning] Aborted connection 12 to db: 'orders'
+2026-07-16T09:00:02.000000000Z stderr F 2026-07-16  9:00:02 0 [ERROR] Table './orders/items' is marked as crashed

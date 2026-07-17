@@ -1,0 +1,10 @@
+{"body":"2026-07-16 09:00:02,125 ERROR (main|1) [Catalog.init():458] failed to replay journal\njava.lang.RuntimeException: boom\n\tat org.apache.doris.catalog.Catalog.init(Catalog.java:458)","severity":"Error(17)"}
+{"body":"2026-07-16 09:00:00,123 INFO (main|1) [Catalog.init():456] starting catalog","severity":"Info(9)"}
+{"body":"09:00:05,128 ERROR (main|1) [Catalog.init():460] time-only pattern variant","severity":"Unspecified(0)"}
+{"body":"09:00:06,129 INFO (main|1) [Catalog.init():461] time-only pattern variant","severity":"Unspecified(0)"}
+{"body":"at capacity, rejecting request","severity":"Unspecified(0)"}
+{"body":"org.apache.doris.catalog.Catalog: ERROR logger-first layout boom\njava.lang.RuntimeException: logger-first trace still joins\n\tat org.apache.doris.catalog.Catalog.init(Catalog.java:460)","severity":"Unspecified(0)"}
+{"body":"org.apache.doris.catalog.Catalog: INFO logger-first layout info","severity":"Unspecified(0)"}
+{"body":"org.apache.doris.qe.Coordinator: ERROR logger-first layout error","severity":"Unspecified(0)"}
+{"body":"2026-07-16 09:00:01,124 WARN (main|1) [Catalog.init():457] slow metadata load","severity":"Warn(13)"}
+{"body":"2026-07-16 09:00:07,130 WARN (main|1) [Pool.check():99] pool exhausted","severity":"Warn(13)"}
