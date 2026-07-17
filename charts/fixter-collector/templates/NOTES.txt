@@ -31,16 +31,7 @@ NOTE: agent.logs.formats is empty, so no text format is being parsed.
   trace becomes one record per frame, and an ERROR ships as Unspecified(0),
   invisible to a severity>=ERROR alert.
 
-  If you are upgrading from CHART 0.1.x this is a CHANGE, and it is silent —
-  chart 0.1.x parsed text logs by default. Note that the chart version and the
-  collector binary version above are DIFFERENT numbers: this notice is about the
-  chart ({{ .Chart.Version }}), not the binary ({{ .Chart.AppVersion }}). Expect
-  a 2-3x rise in record count, which is what you are billed on. It applies
-  whether or not you ever set agent.logs.parsing: rendering clean is not the
-  same as being unaffected.
-
   Add an agent.logs.formats entry with the matching preset for each text-logging
-  workload to restore joining and severity. Presets available: {{ keys .Values.agent.logs.presets | sortAlpha | join ", " }}.
-  See the 0.1.x -> 0.2.0 migration note in the README.
+  workload to restore joining and severity. Presets available: {{ keys (.Values.agent.logs.presets | default dict) | sortAlpha | join ", " }}.
 {{ end -}}
 {{ end -}}
