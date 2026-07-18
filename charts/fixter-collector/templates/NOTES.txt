@@ -24,12 +24,12 @@ Pod logs are ON. Excluded: the collector's own pods{{ range .Values.agent.logs.e
 Rough volume: 10k logs/s of ~216-byte lines is ~186 GB/day. Trim with
 agent.logs.excludeNamespaces / excludePods, or set agent.logs.enabled=false.
 {{ if not .Values.agent.logs.formats }}
-NOTE: agent.logs.formats is empty, so no text format is being parsed.
+NOTE: agent.logs.formats is empty, so only the builtin DB formats are parsed.
 
-  JSON and glog logs are still read structurally and keep their severity. Every
-  OTHER text format now arrives ONE RECORD PER LINE with NO severity: a stack
-  trace becomes one record per frame, and an ERROR ships as Unspecified(0),
-  invisible to a severity>=ERROR alert.
+  Those builtins, plus JSON and glog, keep their severity. Every OTHER text
+  format arrives ONE RECORD PER LINE with NO severity: a stack trace becomes one
+  record per frame, and an ERROR ships as Unspecified(0), invisible to a
+  severity>=ERROR alert.
 
   Add an agent.logs.formats entry with the matching preset for each text-logging
   workload to restore joining and severity. Presets available: {{ keys (.Values.agent.logs.presets | default dict) | sortAlpha | join ", " }}.

@@ -28,6 +28,8 @@ agent:
         include: ["/nonexistent/verify-formats/postgres/*.log"]
       - preset: mysql
         include: ["/nonexistent/verify-formats/mysql/*.log"]
+      - preset: kafka
+        include: ["/nonexistent/verify-formats/kafka/*.log"]
       - preset: doris-fe
         include: ["/nonexistent/verify-formats/doris-fe/*.log"]
       - preset: logfmt

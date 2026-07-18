@@ -1,0 +1,4 @@
+{"body":"[2026-07-16 09:00:05,126] DEBUG [GroupCoordinator id=1] Member heartbeat received (kafka.coordinator.group.GroupCoordinator)","severity":"Debug(5)","severity_text":"DEBUG"}
+{"body":"[2026-07-16 09:00:02,125] ERROR [ReplicaManager broker=1] Error processing fetch (kafka.server.ReplicaManager)\norg.apache.kafka.common.errors.NotLeaderOrFollowerException: This server is not the leader\n\tat kafka.server.ReplicaManager.fetchMessages(ReplicaManager.scala:1024)","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"[2026-07-16 09:00:00,123] INFO [KafkaServer id=1] started (kafka.server.KafkaServer)","severity":"Info(9)","severity_text":"INFO"}
+{"body":"[2026-07-16 09:00:01,124] WARN [Controller id=1] Partition reassignment in progress (kafka.controller.KafkaController)","severity":"Warn(13)","severity_text":"WARN"}

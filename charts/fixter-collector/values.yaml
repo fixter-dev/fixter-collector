@@ -62,6 +62,31 @@ agent:
       - kube-system
     excludePods: []
     formats: []
+    builtinFormats:
+      clickhouse:
+        enabled: true
+        preset: clickhouse
+        include: ["/var/log/pods/*/clickhouse/*.log"]
+      doris-fe:
+        enabled: true
+        preset: doris-fe
+        include: ["/var/log/pods/*_doris-fe-*/*/*.log"]
+      postgres:
+        enabled: true
+        preset: postgres
+        include: ["/var/log/pods/*/postgres/*.log"]
+      mysql:
+        enabled: true
+        preset: mysql
+        include: ["/var/log/pods/*/mysql/*.log"]
+      kafka:
+        enabled: true
+        preset: kafka
+        include: ["/var/log/pods/*/kafka/*.log"]
+      aws-node:
+        enabled: true
+        preset: logfmt
+        include: ["/var/log/pods/*/aws-node/*.log"]
     presets:
       spring:
         continuationRegex: '^\s|^at\s+\S+\(.*\)$|^Caused by:|^Suppressed:|^\.\.\. \d+ (?:more|common frames omitted)|^(?:[\w$]+\.)+[\w$]*(?:Exception|Error|Throwable)(?::|$)'
@@ -69,7 +94,7 @@ agent:
         severityMapping: {}
       clickhouse:
         continuationRegex: '^\s|^\d+\.\s'
-        severityRegex: '<(?P<severity>[A-Za-z]+)>'
+        severityRegex: '\{(?P<clickhouse_query_id>[^}]*)\} <(?P<severity>Trace|Debug|Information|Notice|Warning|Error|Critical|Fatal|Test)>'
         severityMapping:
           info: [information, notice]
           trace: [test]
@@ -86,9 +111,13 @@ agent:
         severityRegex: '\[(?P<severity>System|Warning|ERROR|Note)\]'
         severityMapping:
           info: [system, note]
+      kafka:
+        continuationRegex: '^\s|^at\s+\S+\(.*\)$|^Caused by:|^Suppressed:|^\.\.\. \d+ (?:more|common frames omitted)|^(?:[\w$]+\.)+[\w$]*(?:Exception|Error|Throwable)(?::|$)'
+        severityRegex: '^\[[\d-]+ [\d:,]+\] (?P<severity>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
+        severityMapping: {}
       doris-fe:
         continuationRegex: '^\s|^at\s+\S+\(.*\)$|^Caused by:|^Suppressed:|^\.\.\. \d+ more|^(?:[\w$]+\.)+[\w$]*(?:Exception|Error|Throwable)(?::|$)'
-        severityRegex: '^\S+ \S+ (?P<severity>[A-Z]+) '
+        severityRegex: '^(?:RuntimeLogger )?\S+ \S+ (?P<severity>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
         severityMapping: {}
       logfmt:
         severityKey: level
@@ -129,8 +158,8 @@ agent:
           fatal: 60
       glog:
         enabled: true
-        detectRegex: '^[IWEF]\d{4} '
-        severityRegex: '^(?P<severity>[IWEF])\d{4} '
+        detectRegex: '^[IWEF]\d{4,8} '
+        severityRegex: '^(?P<severity>[IWEF])\d{4,8} '
         severityMapping:
           info: [i]
           warn: [w]

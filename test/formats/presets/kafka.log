@@ -1,0 +1,6 @@
+2026-07-16T09:00:00.000000000Z stdout F [2026-07-16 09:00:00,123] INFO [KafkaServer id=1] started (kafka.server.KafkaServer)
+2026-07-16T09:00:01.000000000Z stdout F [2026-07-16 09:00:01,124] WARN [Controller id=1] Partition reassignment in progress (kafka.controller.KafkaController)
+2026-07-16T09:00:02.000000000Z stdout F [2026-07-16 09:00:02,125] ERROR [ReplicaManager broker=1] Error processing fetch (kafka.server.ReplicaManager)
+2026-07-16T09:00:03.000000000Z stdout F org.apache.kafka.common.errors.NotLeaderOrFollowerException: This server is not the leader
+2026-07-16T09:00:04.000000000Z stdout F 	at kafka.server.ReplicaManager.fetchMessages(ReplicaManager.scala:1024)
+2026-07-16T09:00:05.000000000Z stdout F [2026-07-16 09:00:05,126] DEBUG [GroupCoordinator id=1] Member heartbeat received (kafka.coordinator.group.GroupCoordinator)

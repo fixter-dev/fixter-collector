@@ -1,11 +1,11 @@
-{"body":"2026-07-16T09:00:03.000Z\tERROR\tmyapp/main.go:25\tquery failed\t{\"error\": \"db down\"}\nmain.main\n\t/app/main.go:25","severity":"Error(17)"}
-{"body":"2026-07-16T09:00:05.000Z\terror\tmyapp/main.go:31\tprod console error\t{\"k\": \"v\"}","severity":"Error(17)"}
-{"body":"2026-07-16T09:00:01.000Z\tINFO\tmyapp/main.go:23\tlistening on :8080","severity":"Info(9)"}
-{"body":"2026-07-16T09:00:04.000Z\tinfo\tmyapp/main.go:30\tprod console info","severity":"Info(9)"}
-{"body":"2026-07-16T09:00:06.000Z\tINFO\ttrace-service/main.go:40\terror budget exhausted","severity":"Info(9)"}
+{"body":"2026-07-16T09:00:03.000Z\tERROR\tmyapp/main.go:25\tquery failed\t{\"error\": \"db down\"}\nmain.main\n\t/app/main.go:25","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"2026-07-16T09:00:05.000Z\terror\tmyapp/main.go:31\tprod console error\t{\"k\": \"v\"}","severity":"Error(17)","severity_text":"error"}
+{"body":"2026-07-16T09:00:01.000Z\tINFO\tmyapp/main.go:23\tlistening on :8080","severity":"Info(9)","severity_text":"INFO"}
+{"body":"2026-07-16T09:00:06.000Z\tINFO\ttrace-service/main.go:40\terror budget exhausted","severity":"Info(9)","severity_text":"INFO"}
+{"body":"2026-07-16T09:00:04.000Z\tinfo\tmyapp/main.go:30\tprod console info","severity":"Info(9)","severity_text":"info"}
 {"body":"1784228809.037|info|main.go:31|api.example.com","severity":"Unspecified(0)"}
 {"body":"2026-07-16T09:00:07.000Z INFO cfg.go:50 loaded config.yaml","severity":"Unspecified(0)"}
 {"body":"2026-07-16T09:00:08.000Z ERROR db.go:40 lost connection to 10.0.0.1","severity":"Unspecified(0)"}
 {"body":"ERROR\tmyapp/main.go:42\tno-time-encoder variant error","severity":"Unspecified(0)"}
 {"body":"INFO\tmyapp/main.go:41\tno-time-encoder variant","severity":"Unspecified(0)"}
-{"body":"2026-07-16T09:00:02.000Z\tWARN\tmyapp/main.go:24\tretrying payment gateway\t{\"attempt\": \"1\"}\nmain.main\n\t/app/main.go:24\nruntime.main\n\t/usr/local/go/src/runtime/proc.go:290","severity":"Warn(13)"}
+{"body":"2026-07-16T09:00:02.000Z\tWARN\tmyapp/main.go:24\tretrying payment gateway\t{\"attempt\": \"1\"}\nmain.main\n\t/app/main.go:24\nruntime.main\n\t/usr/local/go/src/runtime/proc.go:290","severity":"Warn(13)","severity_text":"WARN"}

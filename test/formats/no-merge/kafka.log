@@ -1,0 +1,5 @@
+2026-07-16T09:00:00.000000000Z stdout F [2026-07-16 09:00:00,123] INFO [KafkaServer id=1] started (kafka.server.KafkaServer)
+2026-07-16T09:00:01.000000000Z stdout F [2026-07-16 09:00:01,124] INFO [Controller id=1] Registered broker 1 (kafka.controller.KafkaController)
+2026-07-16T09:00:02.000000000Z stdout F [2026-07-16 09:00:02,125] WARN [ReplicaManager broker=1] Slow follower detected (kafka.server.ReplicaManager)
+2026-07-16T09:00:03.000000000Z stdout F [2026-07-16 09:00:03,126] ERROR [LogManager] Failed to flush log segment (kafka.log.LogManager)
+2026-07-16T09:00:04.000000000Z stdout F [2026-07-16 09:00:04,127] DEBUG [GroupCoordinator id=1] Heartbeat from member (kafka.coordinator.group.GroupCoordinator)

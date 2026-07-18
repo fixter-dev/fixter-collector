@@ -84,6 +84,9 @@ func marshalGolden(recs []record) string {
 		if sorted[i].Severity != sorted[j].Severity {
 			return sorted[i].Severity < sorted[j].Severity
 		}
+		if sorted[i].SevText != sorted[j].SevText {
+			return sorted[i].SevText < sorted[j].SevText
+		}
 		return sorted[i].Body < sorted[j].Body
 	})
 	var b strings.Builder
@@ -186,7 +189,8 @@ func diffMultiset(want, got []record) (missing, extra []record) {
 
 func TestCatchAll(t *testing.T) {
 	root := repoRoot(t)
-	agent := renderAgentConfig(t, "--set", "fixter.apiKey=dummy")
+	agent := renderAgentConfig(t, "--set", "fixter.apiKey=dummy",
+		"--set", "agent.logs.builtinFormats=null")
 
 	names := fileLogReceiverNames(t, agent)
 	require.NotEmpty(t, names, "the default render has no file_log receiver at all")
@@ -248,6 +252,61 @@ func requireNonZero(t *testing.T, label string, got []record) {
 		t.Errorf("[%s] zero records: the receiver started but emitted nothing. "+
 			"Run this corpus alone before believing it: go test ./test/formats -run '.*/%s' -v", label, label)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// ClickHouse query_id capture
+// ---------------------------------------------------------------------------
+
+// TestClickhouseQueryID locks the clickhouse preset's query_id capture into
+// attributes.clickhouse_query_id, which the golden triple cannot see.
+func TestClickhouseQueryID(t *testing.T) {
+	root := repoRoot(t)
+	agent := renderAgentConfig(t, "-f", "test/formats/presets-values.yaml")
+	sub := receiverConf(t, agent, "file_log/clickhouse")
+
+	sink := runCorpusSink(t, []*confmap.Conf{sub},
+		filepath.Join(root, "test", "formats", "presets", "clickhouse.log"))
+	vals, present := attrByBody(sink, "clickhouse_query_id")
+
+	find := func(needle string) (body string) {
+		t.Helper()
+		for b := range present {
+			if strings.Contains(b, needle) {
+				return b
+			}
+		}
+		for _, ld := range sink.AllLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				rl := ld.ResourceLogs().At(i)
+				for j := 0; j < rl.ScopeLogs().Len(); j++ {
+					sl := rl.ScopeLogs().At(j)
+					for k := 0; k < sl.LogRecords().Len(); k++ {
+						if b := sl.LogRecords().At(k).Body().AsString(); strings.Contains(b, needle) {
+							return b
+						}
+					}
+				}
+			}
+		}
+		t.Fatalf("no emitted record contains %q", needle)
+		return ""
+	}
+
+	b := find("SELECT 1")
+	require.True(t, present[b], "the {uuid} line carries no clickhouse_query_id attribute")
+	require.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", vals[b])
+
+	b = find("UNKNOWN_TABLE")
+	require.True(t, present[b], "the {abc} line carries no clickhouse_query_id attribute")
+	require.Equal(t, "abc", vals[b])
+
+	b = find("Ready for connections")
+	require.True(t, present[b], "the empty {} line should carry a blank query_id, not nothing")
+	require.Equal(t, "", vals[b])
+
+	b = find("Processing configuration file")
+	require.False(t, present[b], "a line with no {id} <Level> must not carry a clickhouse_query_id")
 }
 
 // ---------------------------------------------------------------------------

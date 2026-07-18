@@ -1,5 +1,16 @@
 {{- include "fixter-collector.validate" . }}
 {{- if .Values.agent.enabled }}
+{{- $root := . }}
+{{- $formats := .Values.agent.logs.formats | default list }}
+{{- $userNames := dict }}
+{{- range $formats }}{{- $n := .name | default .preset }}{{- if $n }}{{- $_ := set $userNames $n true }}{{- end }}{{- end }}
+{{- range $name, $bf := .Values.agent.logs.builtinFormats }}
+{{- if and $bf.enabled (not (hasKey $userNames $name)) }}
+{{- $entry := omit $bf "enabled" }}
+{{- $_ := set $entry "name" $name }}
+{{- $formats = append $formats $entry }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -40,8 +51,6 @@ data:
           load:
       {{- end }}
       {{- if .Values.agent.logs.enabled }}
-      {{- $root := . }}
-      {{- $formats := .Values.agent.logs.formats }}
       {{- include "fixter-collector.validateLogFormats" $formats }}
       {{- range $i, $fmt := $formats }}
       {{- $spec := $fmt }}
@@ -168,7 +177,7 @@ data:
         logs:
           receivers:
             {{- if .Values.agent.logs.enabled }}
-            {{- range .Values.agent.logs.formats }}
+            {{- range $formats }}
             - file_log/{{ .name | default .preset }}
             {{- end }}
             - file_log/default

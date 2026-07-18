@@ -1,4 +1,4 @@
 {"body":"2026-07-16T09:00:00.000Z ERROR 1 --- [main] com.foo.Bar : Boom","severity":"Unspecified(0)"}
 {"body":"2026-07-16T09:00:01.000Z INFO 1 --- [main] com.foo.Bar : after","severity":"Unspecified(0)"}
 {"body":"java.lang.RuntimeException: bad thing\n\tat com.foo.Bar.baz(Bar.java:10)\n\tat com.foo.Bar.qux(Bar.java:20)","severity":"Unspecified(0)"}
-{"body":"{\"level\":\"warn\",\"message\":\"a json log line\"}","severity":"Warn(13)"}
+{"body":"{\"level\":\"warn\",\"message\":\"a json log line\"}","severity":"Warn(13)","severity_text":"warn"}

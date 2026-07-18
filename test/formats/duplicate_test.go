@@ -99,7 +99,8 @@ agent:
 `, dir, dir)
 	require.NoError(t, os.WriteFile(valuesPath, []byte(values), 0o644))
 
-	agent := renderAgentConfig(t, "-f", valuesPath)
+	agent := renderAgentConfig(t, "-f", valuesPath,
+		"--set", "agent.logs.builtinFormats=null")
 
 	require.ElementsMatch(t,
 		[]string{"file_log/narrow", "file_log/broad", "file_log/default"},
