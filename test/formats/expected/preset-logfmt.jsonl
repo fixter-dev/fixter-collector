@@ -1,7 +1,7 @@
-{"body":"ts=2026-07-16T09:00:04Z level=debug msg=\"cache warm\"","severity":"Debug(5)"}
-{"body":"ts=2026-07-16T09:00:00Z caller=main.go:10 msg=\"operator requested level=trace\" level=error err=\"db down\"","severity":"Error(17)"}
-{"body":"ts=2026-07-16T09:00:01Z caller=main.go:11 level=info msg=\"all good\"","severity":"Info(9)"}
+{"body":"ts=2026-07-16T09:00:04Z level=debug msg=\"cache warm\"","severity":"Debug(5)","severity_text":"debug"}
+{"body":"ts=2026-07-16T09:00:00Z caller=main.go:10 msg=\"operator requested level=trace\" level=error err=\"db down\"","severity":"Error(17)","severity_text":"error"}
+{"body":"ts=2026-07-16T09:00:01Z caller=main.go:11 level=info msg=\"all good\"","severity":"Info(9)","severity_text":"info"}
 {"body":"goroutine 1 [running]:","severity":"Unspecified(0)"}
 {"body":"panic: runtime error: index out of range [3] with length 2","severity":"Unspecified(0)"}
 {"body":"ts=2026-07-16T09:00:03Z caller=main.go:13 msg=\"no level field here\" err=\"x\"","severity":"Unspecified(0)"}
-{"body":"level=warn msg=\"disk nearly full\" pct=91","severity":"Warn(13)"}
+{"body":"level=warn msg=\"disk nearly full\" pct=91","severity":"Warn(13)","severity_text":"warn"}

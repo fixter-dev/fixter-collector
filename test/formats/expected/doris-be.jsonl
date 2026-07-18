@@ -1,4 +1,7 @@
-{"body":"E0716 09:00:02.345678 12347 olap_engine.cpp:150] Fail to load tablet meta for tablet 10086","severity":"Error(17)"}
-{"body":"I0716 09:00:00.123456 12345 daemon.cpp:32] Doris BE starting","severity":"Info(9)"}
-{"body":"I0716 09:00:03.456789 12345 daemon.cpp:40] Doris BE started successfully","severity":"Info(9)"}
-{"body":"W0716 09:00:01.234567 12346 heartbeat_server.cpp:88] Fail to get master info, retrying","severity":"Warn(13)"}
+{"body":"E0716 09:00:02.345678 12347 olap_engine.cpp:150] Fail to load tablet meta for tablet 10086","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"E20260716 09:00:06.200000 387 olap_engine.cpp:150] failed to load tablet meta","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"I0716 09:00:00.123456 12345 daemon.cpp:32] Doris BE starting","severity":"Info(9)","severity_text":"INFO"}
+{"body":"I0716 09:00:03.456789 12345 daemon.cpp:40] Doris BE started successfully","severity":"Info(9)","severity_text":"INFO"}
+{"body":"I20260716 09:00:04.383896 385 cloud_meta_mgr.cpp:2226] Created empty rowset for version hole","severity":"Info(9)","severity_text":"INFO"}
+{"body":"W0716 09:00:01.234567 12346 heartbeat_server.cpp:88] Fail to get master info, retrying","severity":"Warn(13)","severity_text":"WARN"}
+{"body":"W20260716 09:00:05.100000 386 heartbeat_server.cpp:88] slow heartbeat from master","severity":"Warn(13)","severity_text":"WARN"}

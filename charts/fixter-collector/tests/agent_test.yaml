@@ -307,10 +307,13 @@ tests:
           pattern: "id: glog-severity"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'body matches \\"\^\[IWEF\]\\\\\\\\d\{4\} \\"'
+          pattern: 'body matches \\"\^\[IWEF\]\\\\\\\\d\{4,8\} \\"'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'error: \["e"\]'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'overwrite_text: true'
 
   - it: can turn the glog route off without touching the JSON route
     template: configmap-agent.yaml
@@ -582,6 +585,7 @@ tests:
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.builtinFormats: null
       agent.logs.formats:
         - preset: spring
           include: ["/var/log/pods/prod_*/*/*.log"]
@@ -638,7 +642,10 @@ tests:
           pattern: "file_log/clickhouse:"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+          pattern: 'clickhouse_query_id'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '<\(\?P<severity>Trace\|Debug\|Information\|Notice\|Warning\|Error\|Critical\|Fatal\|Test\)>'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\\\\\\\\d\+\\\\\\\\\.\\\\\\\\s\\"\)"'
@@ -660,7 +667,7 @@ tests:
           pattern: 'regex: "CUSTOM\(\?P<severity>x\)"'
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: '<\(\?P<severity>\[A-Za-z\]\+\)>'
+          pattern: 'clickhouse_query_id'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'fatal: \["critical"\]'
@@ -679,12 +686,13 @@ tests:
           pattern: 'fatal: \["critical"\]'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+          pattern: 'clickhouse_query_id'
 
   - it: parses logfmt structurally, never with a regex over level=
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.builtinFormats: null
       agent.logs.formats:
         - preset: logfmt
           include: ["/var/log/pods/gokit_*/*/*.log"]
@@ -718,6 +726,7 @@ tests:
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.builtinFormats: null
       agent.logs.formats:
         - preset: logfmt
           include: ["/var/log/pods/gokit_*/*/*.log"]
@@ -756,6 +765,7 @@ tests:
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.builtinFormats: null
       agent.logs.formats:
         - preset: go-stdlib
           include: ["/var/log/pods/op_*/*/*.log"]
@@ -833,12 +843,13 @@ tests:
           include: ["/var/log/pods/x_*/*/*.log"]
     asserts:
       - failedTemplate:
-          errorMessage: 'unknown log format preset "nope". Available presets: clickhouse, doris-fe, dotnet, go-stdlib, logfmt, mysql, postgres, python, spring, zap-console.'
+          errorMessage: 'unknown log format preset "nope". Available presets: clickhouse, doris-fe, dotnet, go-stdlib, kafka, logfmt, mysql, postgres, python, spring, zap-console.'
 
   - it: wires a preset-only format into the pipeline under the preset name
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
+      agent.logs.builtinFormats: null
       agent.logs.formats:
         - preset: clickhouse
           include: ["/var/log/pods/clickhouse_*/*/*.log"]
@@ -880,7 +891,7 @@ tests:
           pattern: "file_log/ch-staging:"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'file_log/ch-prod:[\s\S]*?regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"[\s\S]*?file_log/ch-staging:[\s\S]*?regex: "<\(\?P<severity>\[A-Za-z\]\+\)>"'
+          pattern: 'file_log/ch-prod:[\s\S]*?clickhouse_query_id[\s\S]*?file_log/ch-staging:[\s\S]*?clickhouse_query_id'
 
   - it: fails loudly when a format has neither a name nor a preset
     template: daemonset-agent.yaml
@@ -905,7 +916,7 @@ tests:
           pattern: 'ONE RECORD PER LINE with NO severity'
       - matchRegex:
           path: raw
-          pattern: 'Presets available: clickhouse, doris-fe, dotnet, go-stdlib, logfmt, mysql, postgres, python, spring, zap-console\.'
+          pattern: 'Presets available: clickhouse, doris-fe, dotnet, go-stdlib, kafka, logfmt, mysql, postgres, python, spring, zap-console\.'
 
   - it: does not warn about formats when a format is configured
     template: NOTES.txt
@@ -928,3 +939,40 @@ tests:
       - notMatchRegex:
           path: raw
           pattern: 'NOTE: agent\.logs\.formats is empty'
+
+  - it: renders builtin DB formats by default and merges user formats
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.formats:
+        - preset: postgres
+          include: ["/var/log/pods/*/postgres/*.log"]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/clickhouse:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/doris-fe:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/postgres:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '/var/log/pods/\*/clickhouse/\*.log'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '/var/log/pods/\*_doris-fe-\*/\*/\*.log'
+
+  - it: disables one builtin without touching the other
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.builtinFormats.clickhouse.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/clickhouse:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/doris-fe:'

@@ -1,4 +1,4 @@
-{"body":"2026.07.16 09:00:00.123457 [ 124 ] {a1b2c3d4-e5f6-7890-abcd-ef1234567890} \u003cDebug\u003e executeQuery: (from 10.0.0.1:5432) SELECT 1","severity":"Debug(5)"}
-{"body":"2026.07.16 09:00:00.123458 [ 124 ] {abc} \u003cError\u003e executeQuery: Code: 60. DB::Exception: Table default.foo does not exist. (UNKNOWN_TABLE)\n0. DB::Exception::Exception(...) @ 0x000000000d0b1234 in /usr/bin/clickhouse\n1. DB::Context::checkAccess(...) @ 0x000000000e0c5678 in /usr/bin/clickhouse","severity":"Error(17)"}
-{"body":"2026.07.16 09:00:00.123456 [ 123 ] {} \u003cInformation\u003e Application: Ready for connections","severity":"Info(9)"}
+{"body":"2026.07.16 09:00:00.123457 [ 124 ] {a1b2c3d4-e5f6-7890-abcd-ef1234567890} \u003cDebug\u003e executeQuery: (from 10.0.0.1:5432) SELECT 1","severity":"Debug(5)","severity_text":"Debug"}
+{"body":"2026.07.16 09:00:00.123458 [ 124 ] {abc} \u003cError\u003e executeQuery: Code: 60. DB::Exception: Table default.foo does not exist. (UNKNOWN_TABLE)\n0. DB::Exception::Exception(...) @ 0x000000000d0b1234 in /usr/bin/clickhouse\n1. DB::Context::checkAccess(...) @ 0x000000000e0c5678 in /usr/bin/clickhouse","severity":"Error(17)","severity_text":"Error"}
+{"body":"2026.07.16 09:00:00.123456 [ 123 ] {} \u003cInformation\u003e Application: Ready for connections","severity":"Info(9)","severity_text":"Information"}
 {"body":"Processing configuration file '/etc/clickhouse-server/config.xml'.","severity":"Unspecified(0)"}

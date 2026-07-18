@@ -1,8 +1,8 @@
-{"body":"2026-07-16 09:00:01.456 UTC [42] postgres@mydb ERROR:  relation \"users\" does not exist at character 15","severity":"Error(17)"}
-{"body":"2026-07-16 09:00:02.111 UTC [43] my-app@my-db ERROR:  duplicate key value violates unique constraint","severity":"Error(17)"}
-{"body":"[42] ERROR:  log_line_prefix variant: relation \"users\" does not exist","severity":"Error(17)"}
-{"body":"2026-07-16 09:00:00.123 UTC [1] LOG:  database system is ready to accept connections","severity":"Info(9)"}
-{"body":"[1] LOG:  log_line_prefix variant: connection received","severity":"Info(9)"}
+{"body":"2026-07-16 09:00:01.456 UTC [42] postgres@mydb ERROR:  relation \"users\" does not exist at character 15","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"2026-07-16 09:00:02.111 UTC [43] my-app@my-db ERROR:  duplicate key value violates unique constraint","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"[42] ERROR:  log_line_prefix variant: relation \"users\" does not exist","severity":"Error(17)","severity_text":"ERROR"}
+{"body":"2026-07-16 09:00:00.123 UTC [1] LOG:  database system is ready to accept connections","severity":"Info(9)","severity_text":"LOG"}
+{"body":"[1] LOG:  log_line_prefix variant: connection received","severity":"Info(9)","severity_text":"LOG"}
 {"body":"2026-07-16 09:00:03.333 UTC [45]: [1-1] user=postgres,db=mydb,app=psql,client=10.0.0.1 LOG:  connection authorized","severity":"Unspecified(0)"}
-{"body":"2026-07-16 09:00:04.444 UTC [42] STATEMENT:  SELECT * FROM users","severity":"Unspecified(0)"}
-{"body":"2026-07-16 09:00:02.222 UTC [44] app.worker@db.prod WARNING:  there is no transaction in progress","severity":"Warn(13)"}
+{"body":"2026-07-16 09:00:04.444 UTC [42] STATEMENT:  SELECT * FROM users","severity":"Unspecified(0)","severity_text":"STATEMENT"}
+{"body":"2026-07-16 09:00:02.222 UTC [44] app.worker@db.prod WARNING:  there is no transaction in progress","severity":"Warn(13)","severity_text":"WARNING"}

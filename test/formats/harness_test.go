@@ -378,12 +378,17 @@ func streamsIn(t *testing.T, path, content string) []string {
 // two lines shipped green. A {Body, Severity} pair fixes that: each record
 // carries what it says AND what level it claims, so a transposition moves a pair
 // and cannot hide.
+//
+// SevText is the resolved SeverityText — what is stamped downstream as `level` —
+// which is not the numeric level's name: a glog `I` stays `I` unless
+// overwrite_text canonicalises it to `INFO`.
 type record struct {
 	Body     string `json:"body"`
 	Severity string `json:"severity"`
+	SevText  string `json:"severity_text,omitempty"`
 }
 
-func (r record) String() string { return fmt.Sprintf("%s\t%q", r.Severity, r.Body) }
+func (r record) String() string { return fmt.Sprintf("%s/%q\t%q", r.Severity, r.SevText, r.Body) }
 
 // runCorpus feeds one corpus through the given receivers and returns every
 // record they emitted.
@@ -403,6 +408,13 @@ func (r record) String() string { return fmt.Sprintf("%s\t%q", r.Severity, r.Bod
 // because pointing all of them at one corpus would run every preset over it at
 // once and multiply every record.
 func runCorpus(t *testing.T, subs []*confmap.Conf, corpusPath string) []record {
+	t.Helper()
+	return withoutSentinel(collect(runCorpusSink(t, subs, corpusPath)))
+}
+
+// runCorpusSink is runCorpus without the flatten, returning the settled sink so a
+// caller can inspect attributes, which cannot live on the comparable `record`.
+func runCorpusSink(t *testing.T, subs []*confmap.Conf, corpusPath string) *consumertest.LogsSink {
 	t.Helper()
 	require.NotEmpty(t, subs, "no receivers to run")
 
@@ -431,7 +443,29 @@ func runCorpus(t *testing.T, subs []*confmap.Conf, corpusPath string) []record {
 	}
 
 	waitSettled(t, sink)
-	return withoutSentinel(collect(sink))
+	return sink
+}
+
+// attrByBody maps each emitted record's body to one attribute's value; present
+// separates "absent" from "present but empty" (an empty ClickHouse `{}`).
+func attrByBody(sink *consumertest.LogsSink, key string) (vals map[string]string, present map[string]bool) {
+	vals, present = map[string]string{}, map[string]bool{}
+	for _, ld := range sink.AllLogs() {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			for j := 0; j < rl.ScopeLogs().Len(); j++ {
+				sl := rl.ScopeLogs().At(j)
+				for k := 0; k < sl.LogRecords().Len(); k++ {
+					lr := sl.LogRecords().At(k)
+					if v, ok := lr.Attributes().Get(key); ok {
+						vals[lr.Body().AsString()] = v.AsString()
+						present[lr.Body().AsString()] = true
+					}
+				}
+			}
+		}
+	}
+	return vals, present
 }
 
 // waitSettled blocks until the sink's record count has stopped moving.
@@ -476,6 +510,7 @@ func collect(sink *consumertest.LogsSink) []record {
 					out = append(out, record{
 						Body:     lr.Body().AsString(),
 						Severity: severityString(lr.SeverityNumber()),
+						SevText:  lr.SeverityText(),
 					})
 				}
 			}

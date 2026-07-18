@@ -12,3 +12,5 @@
 2026-07-16T09:00:12.000000000Z stdout F 	at org.apache.doris.catalog.Catalog.init(Catalog.java:460)
 2026-07-16T09:00:13.000000000Z stdout F 2026-07-16 09:00:07,130 WARN (main|1) [Pool.check():99] pool exhausted
 2026-07-16T09:00:14.000000000Z stdout F at capacity, rejecting request
+2026-07-16T09:00:15.000000000Z stdout F RuntimeLogger 2026-07-16 09:00:10,200 INFO (cloud tablet rebalancer|63) [CloudTabletRebalancer.runAfterCatalog():112] rebalancing cloud tablets
+2026-07-16T09:00:16.000000000Z stdout F RuntimeLogger 2026-07-16 09:00:11,201 WARN (cloud tablet rebalancer|63) [CloudTabletRebalancer.balance():140] tablet skew detected

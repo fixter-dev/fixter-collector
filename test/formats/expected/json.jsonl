@@ -1,4 +1,4 @@
-{"body":"{\"level\":50,\"time\":1752652803000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"span_id\":\"00f067aa0ba902b7\",\"trace_flags\":\"01\",\"err\":{\"type\":\"Error\",\"message\":\"connect ECONNREFUSED 127.0.0.1:5432\",\"stack\":\"Error: connect ECONNREFUSED\"},\"msg\":\"database connection failed\"}","severity":"Error(17)"}
-{"body":"{\"level\":60,\"time\":1752652804000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"unrecoverable state, exiting\"}","severity":"Fatal(21)"}
-{"body":"{\"level\":30,\"time\":1752652801000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"Server listening at http://0.0.0.0:3000\"}","severity":"Info(9)"}
-{"body":"{\"level\":40,\"time\":1752652802000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"deprecated config option 'foo' used\"}","severity":"Warn(13)"}
+{"body":"{\"level\":50,\"time\":1752652803000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"span_id\":\"00f067aa0ba902b7\",\"trace_flags\":\"01\",\"err\":{\"type\":\"Error\",\"message\":\"connect ECONNREFUSED 127.0.0.1:5432\",\"stack\":\"Error: connect ECONNREFUSED\"},\"msg\":\"database connection failed\"}","severity":"Error(17)","severity_text":"50"}
+{"body":"{\"level\":60,\"time\":1752652804000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"unrecoverable state, exiting\"}","severity":"Fatal(21)","severity_text":"60"}
+{"body":"{\"level\":30,\"time\":1752652801000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"Server listening at http://0.0.0.0:3000\"}","severity":"Info(9)","severity_text":"30"}
+{"body":"{\"level\":40,\"time\":1752652802000,\"pid\":1,\"hostname\":\"web-7f9c8d\",\"msg\":\"deprecated config option 'foo' used\"}","severity":"Warn(13)","severity_text":"40"}
