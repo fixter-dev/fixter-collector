@@ -129,8 +129,8 @@ agent:
           fatal: 60
       glog:
         enabled: true
-        detectRegex: '^[IWEF]\d{4} '
-        severityRegex: '^(?P<severity>[IWEF])\d{4} '
+        detectRegex: '^[IWEF]\d{4}(\d{4})? '
+        severityRegex: '^(?P<severity>[IWEF])\d{4}(\d{4})? '
         severityMapping:
           info: [i]
           warn: [w]
