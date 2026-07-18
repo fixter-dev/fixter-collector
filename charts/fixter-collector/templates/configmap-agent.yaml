@@ -5,7 +5,7 @@
 {{- $userNames := dict }}
 {{- range $formats }}{{- $n := .name | default .preset }}{{- if $n }}{{- $_ := set $userNames $n true }}{{- end }}{{- end }}
 {{- range $name, $bf := .Values.agent.logs.builtinFormats }}
-{{- if and $bf.enabled (not (hasKey $userNames $name)) }}
+{{- if and (kindIs "map" $bf) $bf.enabled (not (hasKey $userNames $name)) }}
 {{- $entry := omit $bf "enabled" }}
 {{- $_ := set $entry "name" $name }}
 {{- $formats = append $formats $entry }}
@@ -69,8 +69,8 @@ data:
           {{- range $fmt.include }}
           - {{ . | quote }}
           {{- end }}
-        {{- if gt (int $i) 0 }}
         exclude:
+          {{- include "fixter-collector.baseLogExcludes" $root | nindent 10 }}
           {{- range $j, $prev := $formats }}
           {{- if lt $j $i }}
           {{- range $prev.include }}
@@ -78,7 +78,6 @@ data:
           {{- end }}
           {{- end }}
           {{- end }}
-        {{- end }}
         start_at: end
         include_file_path: true
         operators:
@@ -89,13 +88,7 @@ data:
         include:
           - /var/log/pods/*/*/*.log
         exclude:
-          - /var/log/pods/*_{{ include "fixter-collector.fullname" . }}*_*/*/*.log
-          {{- range .Values.agent.logs.excludeNamespaces }}
-          - /var/log/pods/{{ . }}_*/*/*.log
-          {{- end }}
-          {{- range .Values.agent.logs.excludePods }}
-          - /var/log/pods/*_{{ . }}*_*/*/*.log
-          {{- end }}
+          {{- include "fixter-collector.baseLogExcludes" $root | nindent 10 }}
           {{- range $fmt := $formats }}
           {{- range $fmt.include }}
           - {{ . | quote }}

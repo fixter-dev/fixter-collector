@@ -79,3 +79,13 @@ FIXTER_API_KEY
   action: upsert
 {{- end }}
 {{- end -}}
+
+{{- define "fixter-collector.baseLogExcludes" -}}
+- /var/log/pods/*_{{ include "fixter-collector.fullname" . }}*_*/*/*.log
+{{- range .Values.agent.logs.excludeNamespaces }}
+- /var/log/pods/{{ . }}_*/*/*.log
+{{- end }}
+{{- range .Values.agent.logs.excludePods }}
+- /var/log/pods/*_{{ . }}*_*/*/*.log
+{{- end }}
+{{- end -}}
