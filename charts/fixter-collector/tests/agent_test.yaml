@@ -297,7 +297,7 @@ tests:
           path: data["config.yaml"]
           pattern: "error: 50"
 
-  - it: routes glog logs so Doris BE gets a severity
+  - it: routes glog logs so Doris BE gets a severity, including the 8-digit date variant
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
@@ -307,7 +307,13 @@ tests:
           pattern: "id: glog-severity"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'body matches \\"\^\[IWEF\]\\\\\\\\d\{4\} \\"'
+          pattern: 'body matches \\"\^\[IWEF\]\\\\\\\\d\{4\}\(\\\\\\\\d\{4\}\)\? \\"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'regex: "\^\(\?P<severity>\[IWEF\]\)\\\\d\{4\}\(\\\\d\{4\}\)\? "'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "overwrite_text: true"
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'error: \["e"\]'

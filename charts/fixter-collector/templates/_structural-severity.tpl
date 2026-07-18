@@ -46,6 +46,7 @@
   output: parsed
   severity:
     parse_from: attributes.severity
+    overwrite_text: true
     {{- with $s.glog.severityMapping }}
     mapping:
       {{- range $level, $values := . }}
