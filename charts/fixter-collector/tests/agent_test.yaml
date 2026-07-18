@@ -504,10 +504,10 @@ tests:
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'file_log/broad:\n\s+include:\n\s+- "[^"]*"\n\s+exclude:\n(\s+#[^\n]*\n)*\s+- "/var/log/pods/prod_api_\*/\*/\*\.log"'
-      - notMatchRegex:
+          pattern: 'file_log/broad:\n\s+include:\n\s+- "[^"]*"\n\s+exclude:\n[\s\S]*?- "/var/log/pods/prod_api_\*/\*/\*\.log"'
+      - matchRegex:
           path: data["config.yaml"]
-          pattern: 'file_log/narrow:[\s\S]*?exclude:[\s\S]*?file_log/broad:'
+          pattern: 'file_log/narrow:\n\s+include:\n\s+- "/var/log/pods/prod_api_\*/\*/\*\.log"\n\s+exclude:\n\s+- /var/log/pods/\*_[^\n]*fixter-collector[^\n]*\n\s+- /var/log/pods/kube-system_\*/\*/\*\.log\n\s+start_at:'
 
   - it: rejects duplicate format names instead of shipping a crash-loop
     template: daemonset-agent.yaml
@@ -969,6 +969,30 @@ tests:
     set:
       fixter.apiKey: test-key-123
       agent.logs.builtinFormats.clickhouse.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/clickhouse:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'file_log/doris-fe:'
+
+  - it: format receivers honor excludeNamespaces and excludePods globally
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.excludeNamespaces: [kube-system, data]
+      agent.logs.excludePods: [noisy]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'aws-node/\*.log"\n\s+exclude:\n\s+- /var/log/pods/\*_[^\n]*fixter-collector[^\n]*\n\s+- /var/log/pods/kube-system_\*/\*/\*.log\n\s+- /var/log/pods/data_\*/\*/\*.log\n\s+- /var/log/pods/\*_noisy\*_\*/\*/\*.log'
+
+  - it: skips a malformed builtinFormats entry instead of crashing the template
+    template: configmap-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+      agent.logs.builtinFormats.clickhouse: "oops"
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]

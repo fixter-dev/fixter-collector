@@ -74,7 +74,7 @@ agent:
       postgres:
         enabled: true
         preset: postgres
-        include: ["/var/log/pods/*/postgres/*.log"]
+        include: ["/var/log/pods/*/postgres/*.log", "/var/log/pods/*/postgresql/*.log"]
       mysql:
         enabled: true
         preset: mysql
