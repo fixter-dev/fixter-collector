@@ -152,7 +152,7 @@ tests:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: false
 
-  - it: the catch-all recombines only on ^\s and never guesses severity from text
+  - it: the catch-all recombines only on ^\s or ^$ and never guesses severity from text
     template: configmap-agent.yaml
     set:
       fixter.apiKey: test-key-123
@@ -163,7 +163,7 @@ tests:
           pattern: "type: recombine"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\\"\)"'
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\$\\"\)"'
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: 'is_first_entry: "body matches'
@@ -648,7 +648,7 @@ tests:
           pattern: '<\(\?P<severity>Trace\|Debug\|Information\|Notice\|Warning\|Error\|Critical\|Fatal\|Test\)>'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\\\\\\\\d\+\\\\\\\\\.\\\\\\\\s\\"\)"'
+          pattern: 'is_first_entry: "!\(body matches \\"\^\\\\\\\\s\|\^\$\|\^\\\\\\\\d\+\\\\\\\\\.\\\\\\\\s\\"\)"'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'fatal: \["critical"\]'

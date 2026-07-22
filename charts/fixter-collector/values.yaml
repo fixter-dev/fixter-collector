@@ -66,7 +66,9 @@ agent:
       clickhouse:
         enabled: true
         preset: clickhouse
-        include: ["/var/log/pods/*/clickhouse/*.log"]
+        # clickhouse-keeper logs the same `{} <Level>` format from its own
+        # container name, so it routes here too rather than to the catch-all.
+        include: ["/var/log/pods/*/clickhouse/*.log", "/var/log/pods/*/clickhouse-keeper/*.log"]
       doris-fe:
         enabled: true
         preset: doris-fe
@@ -93,7 +95,7 @@ agent:
         severityRegex: '^\S+ +(?:\d\d:\d\d:\d\d[.,]\d+ +)?(?P<severity>[A-Z]+) '
         severityMapping: {}
       clickhouse:
-        continuationRegex: '^\s|^\d+\.\s'
+        continuationRegex: '^\s|^$|^\d+\.\s'
         severityRegex: '\{(?P<clickhouse_query_id>[^}]*)\} <(?P<severity>Trace|Debug|Information|Notice|Warning|Error|Critical|Fatal|Test)>'
         severityMapping:
           info: [information, notice]
@@ -116,7 +118,10 @@ agent:
         severityRegex: '^\[[\d-]+ [\d:,]+\] (?P<severity>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
         severityMapping: {}
       doris-fe:
-        continuationRegex: '^\s|^at\s+\S+\(.*\)$|^Caused by:|^Suppressed:|^\.\.\. \d+ more|^(?:[\w$]+\.)+[\w$]*(?:Exception|Error|Throwable)(?::|$)'
+        # ^$ and ^, __FILE__: are for the BE-style native traces FE relays into
+        # its own log: `WARN ...` then one EMPTY line, tab-indented `0# ...`
+        # frames, and a column-0 `, __FILE__:<path>, __LINE__:...` tail line.
+        continuationRegex: '^\s|^$|^, __FILE__:|^at\s+\S+\(.*\)$|^Caused by:|^Suppressed:|^\.\.\. \d+ more|^(?:[\w$]+\.)+[\w$]*(?:Exception|Error|Throwable)(?::|$)'
         severityRegex: '^(?:RuntimeLogger )?\S+ \S+ (?P<severity>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
         severityMapping: {}
       logfmt:
