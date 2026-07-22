@@ -5,3 +5,13 @@
 2026-07-16T09:00:05.000000000Z stdout F I20260716 09:00:04.383896 385 cloud_meta_mgr.cpp:2226] Created empty rowset for version hole
 2026-07-16T09:00:06.000000000Z stdout F W20260716 09:00:05.100000 386 heartbeat_server.cpp:88] slow heartbeat from master
 2026-07-16T09:00:07.000000000Z stdout F E20260716 09:00:06.200000 387 olap_engine.cpp:150] failed to load tablet meta
+2026-07-16T09:00:08.000000000Z stdout F W20260716 09:00:07.300000 368 status.h:441] meet error status: [INTERNAL_ERROR]local rowset has no storage resource. tablet_id=1784362670033 rowset_id=020000000007d083534310189944942e39adebd1e3edf386
+2026-07-16T09:00:08.000100000Z stdout F 
+2026-07-16T09:00:08.000200000Z stdout F 	0#  doris::RowsetMeta::remote_storage_resource()
+2026-07-16T09:00:08.000300000Z stdout F 	1#  doris::CloudInternalServiceImpl::warm_up_rowset(google::protobuf::RpcController*, doris::PWarmUpRowsetRequest const*, doris::PWarmUpRowsetResponse*, google::protobuf::Closure*)
+2026-07-16T09:00:08.000400000Z stdout F 	2#  brpc::policy::ProcessRpcRequest(brpc::InputMessageBase*)
+2026-07-16T09:00:08.000500000Z stdout F 	3#  bthread::TaskGroup::task_runner(long)
+2026-07-16T09:00:08.000600000Z stdout F W20260716 09:00:07.400000 368 cloud_internal_service.cpp:545] [INTERNAL_ERROR]local rowset has no storage resource. tablet_id=1784362670033
+2026-07-16T09:00:08.000700000Z stdout F 
+2026-07-16T09:00:08.000800000Z stdout F 	0#  doris::RowsetMeta::remote_storage_resource()
+2026-07-16T09:00:08.000900000Z stdout F 	1#  brpc::policy::ProcessRpcRequest(brpc::InputMessageBase*)

@@ -7,10 +7,11 @@
 //     catch-all does not know the format, so JSON and glog resolve structurally
 //     and every other text line gets NO severity. Unspecified(0) is the right
 //     answer there, not a gap — never widen a pattern until a severity appears.
-//     It DOES recombine on `^\s` (an indented line joins the record above), the
-//     one format-agnostic continuation rule, so a stack trace's frames rejoin
-//     while top-level lines stay separate — see TestCatchAllNoMerge, the guard
-//     that `^\s` never merges two independent column-0 lines.
+//     It DOES recombine on `^\s|^$` (an indented OR empty line joins the record
+//     above), the one format-agnostic continuation rule, so a stack trace's
+//     frames rejoin while top-level lines stay separate — including glog traces
+//     whose frames sit after one EMPTY line (Doris BE) — see TestCatchAllNoMerge,
+//     the guard that the rule never merges two independent column-0 lines.
 //  2. every preset -> one file_log/<preset> receiver each. Its goldens record
 //     CORRECT values, always. Pass 2 exists because pass 1 renders no preset
 //     receiver at all: a preset regex could rot to anything and pass 1 stayed
@@ -435,21 +436,22 @@ func TestResidualsNameRealPresets(t *testing.T) {
 
 // TestCatchAllNoMerge is pass 3 for the CATCH-ALL. The per-preset TestNoMerge
 // above cannot cover it — the catch-all is not a preset and never appears in
-// presets-values.yaml — but it now carries a recombine of its own (`^\s`), so it
-// gets the same guard: N ordinary, INDEPENDENT top-level log lines must produce N
-// records, never fewer.
+// presets-values.yaml — but it now carries a recombine of its own (`^\s|^$`), so
+// it gets the same guard: N ordinary, INDEPENDENT top-level log lines must
+// produce N records, never fewer.
 //
 // The corpus is drawn from formats the catch-all has NO preset for — a bare
 // key=value app log, a `2026/07/16 message`, an uppercase-level line, a JSON
 // line, a couple of plain lines and two exception headers — every one of them at
 // column 0, because that is the claim `^\s` rests on: essentially no logger
-// begins a new top-level event with leading whitespace. The only indented lines
-// are trace CONTINUATIONS (a Java tab frame set and a Python space-indented
-// traceback), which legitimately join the record above and are the fragmentation
-// win, not a merge.
+// begins a new top-level event with leading whitespace. The only lines that are
+// not top-level are trace CONTINUATIONS (a Java tab frame set and a Python
+// space-indented traceback) and one BLANK line, which legitimately join the
+// record above and are the fragmentation win, not a merge — the blank line is
+// the `^$` branch's guard, a glog trace separates header from frames with one.
 //
 // Expected N is DERIVED, not blessed: it is the count of app lines whose payload
-// does not match `^\s`, computed with the very predicate the chart renders. A
+// does not match `^\s|^$`, computed with the very predicate the chart renders. A
 // merge of two independent (column-0) lines drops the record count below N and
 // FAILS; a continuation that stopped joining raises it above N and FAILS too.
 // There is no golden and no bless path, exactly as for the per-preset guard.
@@ -476,15 +478,15 @@ func TestCatchAllNoMerge(t *testing.T) {
 
 	if len(got) < independent {
 		t.Errorf("[no-merge-catch-all] MERGE: %d independent top-level lines produced records=%d.\n"+
-			"  The catch-all's `^\\s` rule swallowed %d column-0 line(s) into the record above,\n"+
-			"  hiding their text and their severity. `^\\s` is NOT safe as-is: a no-preset format\n"+
+			"  The catch-all's `^\\s|^$` rule swallowed %d column-0 line(s) into the record above,\n"+
+			"  hiding their text and their severity. The rule is NOT safe as-is: a no-preset format\n"+
 			"  whose ordinary output is legitimately indented is the risk. Do NOT ship it.\n%s",
 			independent, len(got), independent-len(got), dumpRecords(got))
 		return
 	}
 	if len(got) > independent {
-		t.Errorf("[no-merge-catch-all] records=%d, expected %d: an indented trace continuation\n"+
-			"  stopped joining the record above (the fragmentation the `^\\s` rule exists to fix).\n%s",
+		t.Errorf("[no-merge-catch-all] records=%d, expected %d: an indented or blank trace continuation\n"+
+			"  stopped joining the record above (the fragmentation the `^\\s|^$` rule exists to fix).\n%s",
 			len(got), independent, dumpRecords(got))
 		return
 	}

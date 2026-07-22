@@ -14,3 +14,10 @@
 2026-07-16T09:00:14.000000000Z stdout F at capacity, rejecting request
 2026-07-16T09:00:15.000000000Z stdout F RuntimeLogger 2026-07-16 09:00:10,200 INFO (cloud tablet rebalancer|63) [CloudTabletRebalancer.runAfterCatalog():112] rebalancing cloud tablets
 2026-07-16T09:00:16.000000000Z stdout F RuntimeLogger 2026-07-16 09:00:11,201 WARN (cloud tablet rebalancer|63) [CloudTabletRebalancer.balance():140] tablet skew detected
+2026-07-16T09:00:17.000000000Z stdout F RuntimeLogger 2026-07-16 09:00:12,300 WARN (Auto Analysis Job Executor-0|812) [Coordinator.getNext():1205] Query cancelled: MEM_LIMIT_EXCEEDED
+2026-07-16T09:00:17.100000000Z stdout F 
+2026-07-16T09:00:17.200000000Z stdout F 	0#  doris::Exception::Exception(int, std::basic_string_view<char, std::char_traits<char> > const&, bool)
+2026-07-16T09:00:17.300000000Z stdout F 	1#  doris::Exception::Exception(int, std::basic_string_view<char, std::char_traits<char> > const&)
+2026-07-16T09:00:17.400000000Z stdout F 	2#  doris::Allocator<true, false, false, doris::DefaultMemoryAllocator, true>::sys_memory_check(unsigned long) const
+2026-07-16T09:00:17.500000000Z stdout F 	15# ?
+2026-07-16T09:00:17.600000000Z stdout F , __FILE__:/home/zcp/repo_center/doris_release/doris/be/src/exec/pipeline/task_scheduler.cpp, __LINE__:170, __FUNCTION__:auto doris::pipeline::TaskScheduler::_do_work(int)

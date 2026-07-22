@@ -260,7 +260,7 @@ func buildConfig(t *testing.T, sub *confmap.Conf, dir string) component.Config {
 // recombine.
 //
 // It decides whether a corpus gets a sentinel line (see writeCorpus). The
-// catch-all now recombines too (on `^\s`), so it gets a sentinel like any preset
+// catch-all now recombines too (on `^\s|^$`), so it gets a sentinel like any preset
 // with a recombine. Only the `logfmt` preset has NO recombine — it is a one-line
 // format by construction — so it emits every record immediately and a sentinel
 // there would just be an extra record.
@@ -339,12 +339,16 @@ func writeCorpus(t *testing.T, dir, corpusPath string, sentinel bool) {
 //	<RFC3339Nano> <stdout|stderr> <F|P> <the application's log line>
 var criLine = regexp.MustCompile(`^\S+ (stdout|stderr) [FP] ?`)
 
-// catchAllContinuation is the catch-all's single continuation rule, `^\s`, so
+// catchAllContinuation is the catch-all's continuation rule, `^\s|^$`, so
 // TestCatchAllNoMerge derives its expectation from the corpus with the SAME
-// predicate the chart renders — an app line beginning with whitespace joins the
-// record above, everything else starts a new one. See configmap-agent.yaml's
-// file_log/default operators.
-var catchAllContinuation = regexp.MustCompile(`^\s`)
+// predicate the chart renders — an app line beginning with whitespace OR empty
+// joins the record above, everything else starts a new one. The `^$` branch
+// exists because glog-style stack traces (Doris BE's "meet error status")
+// separate the header from the indented frames with one EMPTY line, and `^\s`
+// alone cannot match an empty string — the blank line started a new record and
+// took the whole stack with it. See configmap-agent.yaml's file_log/default
+// operators.
+var catchAllContinuation = regexp.MustCompile(`^\s|^$`)
 
 // streamsIn returns the distinct CRI streams present in a corpus, in a stable
 // order. It also enforces the CRI envelope: a corpus line that is not CRI would
