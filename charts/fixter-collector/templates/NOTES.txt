@@ -17,7 +17,7 @@ Cluster:     {{ .Values.fixter.clusterName }}
    OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 {{ end -}}
-3. Your data lands at https://fixter.dev within ~1 minute.
+3. Your data lands at https://app.fixter.dev within ~1 minute.
 
 {{ if .Values.agent.logs.enabled -}}
 Pod logs are ON. Excluded: the collector's own pods{{ range .Values.agent.logs.excludeNamespaces }}, {{ . }}{{ end }}.

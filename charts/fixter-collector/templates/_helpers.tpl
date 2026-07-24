@@ -47,7 +47,7 @@ FIXTER_API_KEY
 {{- fail "set fixter.apiKey OR fixter.existingSecret, not both" -}}
 {{- end -}}
 {{- if not (or .Values.fixter.apiKey .Values.fixter.existingSecret) -}}
-{{- fail "no Fixter credentials: set fixter.apiKey (or fixter.existingSecret). Get a key at https://fixter.dev -> Settings -> API Keys" -}}
+{{- fail "no Fixter credentials: set fixter.apiKey (or fixter.existingSecret). Get a key at https://app.fixter.dev -> Settings -> API Keys" -}}
 {{- end -}}
 {{- if not .Values.fixter.endpoint -}}
 {{- fail "fixter.endpoint must not be empty" -}}

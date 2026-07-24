@@ -36,7 +36,7 @@ spec:
             401|403)
               echo "FAIL: Fixter rejected the API key."
               echo "The collector will run and report healthy while sending nothing."
-              echo "Check fixter.apiKey, or regenerate at https://fixter.dev -> Settings -> API Keys"
+              echo "Check fixter.apiKey, or regenerate at https://app.fixter.dev -> Settings -> API Keys"
               exit 1 ;;
             000)
               echo "FAIL: could not reach ${FIXTER_ENDPOINT} (DNS, egress, or firewall)."
