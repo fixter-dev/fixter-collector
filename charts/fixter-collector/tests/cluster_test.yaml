@@ -174,7 +174,7 @@ tests:
             resources: ["horizontalpodautoscalers"]
             verbs: ["get", "list", "watch"]
 
-  - it: pulls core Kubernetes Events by default
+  - it: watches core Kubernetes Events by default
     template: configmap-cluster.yaml
     set:
       fixter.apiKey: test-key-123
@@ -187,10 +187,13 @@ tests:
           pattern: "name: events"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "mode: pull"
+          pattern: "mode: watch"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "interval: 30s"
+          pattern: "k8s_objects:\\n    auth_type: serviceAccount\\n    objects:\\n      - name: events\\n        mode: watch\\nprocessors:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "(?s)k8s_objects:.*?interval:.*?processors:\\n  memory_limiter:"
 
   - it: routes Events through a logs pipeline to the same exporter
     template: configmap-cluster.yaml
@@ -212,6 +215,36 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "processors: \\[memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch\\]"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.namespace.name"\], body\["object"\]\["involvedObject"\]\["namespace"\]\) where body\["object"\]\["involvedObject"\]\["namespace"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.object.kind"\], body\["object"\]\["involvedObject"\]\["kind"\]\) where body\["object"\]\["involvedObject"\]\["kind"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.object.name"\], body\["object"\]\["involvedObject"\]\["name"\]\) where body\["object"\]\["involvedObject"\]\["name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.event.reason"\], body\["object"\]\["reason"\]\) where body\["object"\]\["reason"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.event.type"\], body\["object"\]\["type"\]\) where body\["object"\]\["type"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(severity_text, "WARN"\) where body\["object"\]\["type"\] == "Warning"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(severity_text, "INFO"\) where body\["object"\]\["type"\] == "Normal"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(time, Time\(body\["object"\]\["lastTimestamp"\], "%Y-%m-%dT%H:%M:%SZ"\)\) where body\["object"\]\["lastTimestamp"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(time, Time\(body\["object"\]\["eventTime"\], "%Y-%m-%dT%H:%M:%SZ"\)\) where body\["object"\]\["lastTimestamp"\] == nil and body\["object"\]\["eventTime"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(time, Time\(body\["object"\]\["firstTimestamp"\], "%Y-%m-%dT%H:%M:%SZ"\)\) where body\["object"\]\["lastTimestamp"\] == nil and body\["object"\]\["eventTime"\] == nil and body\["object"\]\["firstTimestamp"\] != nil'
 
   - it: omits the Events receiver, the logs pipeline, and the event transform when disabled
     template: configmap-cluster.yaml
@@ -224,7 +257,7 @@ tests:
           pattern: "k8s_objects"
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "logs:"
+          pattern: "logs:\\n      receivers"
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "transform/k8s_event_identity"
@@ -242,10 +275,25 @@ tests:
           pattern: "context: datapoint"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'set\(attributes\["k8s.pod.name"\]'
+          pattern: 'set\(attributes\["k8s.pod.name"\], resource.attributes\["k8s.pod.name"\]\) where resource.attributes\["k8s.pod.name"\] != nil'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'set\(attributes\["k8s.namespace.name"\]'
+          pattern: 'set\(attributes\["k8s.namespace.name"\], resource.attributes\["k8s.namespace.name"\]\) where resource.attributes\["k8s.namespace.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.container.name"\], resource.attributes\["k8s.container.name"\]\) where resource.attributes\["k8s.container.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.node.name"\], resource.attributes\["k8s.node.name"\]\) where resource.attributes\["k8s.node.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.deployment.name"\], resource.attributes\["k8s.deployment.name"\]\) where resource.attributes\["k8s.deployment.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.statefulset.name"\], resource.attributes\["k8s.statefulset.name"\]\) where resource.attributes\["k8s.statefulset.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.daemonset.name"\], resource.attributes\["k8s.daemonset.name"\]\) where resource.attributes\["k8s.daemonset.name"\] != nil'
 
   - it: transforms after resource enrichment and before batching
     template: configmap-cluster.yaml

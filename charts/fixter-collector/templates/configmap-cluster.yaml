@@ -25,8 +25,7 @@ data:
         auth_type: serviceAccount
         objects:
           - name: events
-            mode: pull
-            interval: 30s
+            mode: watch
       {{- end }}
       {{- if .Values.integrations.prometheus.targets }}
       prometheus:
@@ -72,12 +71,16 @@ data:
         log_statements:
           - context: log
             statements:
-              - set(attributes["k8s.namespace.name"], body["involvedObject"]["namespace"]) where body["involvedObject"]["namespace"] != nil
-              - set(attributes["k8s.object.kind"], body["involvedObject"]["kind"]) where body["involvedObject"]["kind"] != nil
-              - set(attributes["k8s.object.name"], body["involvedObject"]["name"]) where body["involvedObject"]["name"] != nil
-              - set(attributes["k8s.event.reason"], body["reason"]) where body["reason"] != nil
-              - set(attributes["k8s.event.type"], body["type"]) where body["type"] != nil
-              - set(time, Time(body["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["lastTimestamp"] != nil
+              - set(attributes["k8s.namespace.name"], body["object"]["involvedObject"]["namespace"]) where body["object"]["involvedObject"]["namespace"] != nil
+              - set(attributes["k8s.object.kind"], body["object"]["involvedObject"]["kind"]) where body["object"]["involvedObject"]["kind"] != nil
+              - set(attributes["k8s.object.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["name"] != nil
+              - set(attributes["k8s.event.reason"], body["object"]["reason"]) where body["object"]["reason"] != nil
+              - set(attributes["k8s.event.type"], body["object"]["type"]) where body["object"]["type"] != nil
+              - set(severity_text, "WARN") where body["object"]["type"] == "Warning"
+              - set(severity_text, "INFO") where body["object"]["type"] == "Normal"
+              - set(time, Time(body["object"]["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] != nil
+              - set(time, Time(body["object"]["eventTime"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] != nil
+              - set(time, Time(body["object"]["firstTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] == nil and body["object"]["firstTimestamp"] != nil
       {{- end }}
       batch:
         timeout: 10s

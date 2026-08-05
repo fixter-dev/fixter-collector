@@ -58,10 +58,10 @@ skipped.
 
 ### Kubernetes Events
 
-The cluster collector polls core Kubernetes Events and ships them as logs.
-Events carry the *reason* a pod changed state — `OOMKilled`,
-`CrashLoopBackOff`, `FailedScheduling`, `Unhealthy` — which the cluster-state
-metrics cannot express on their own.
+The cluster collector watches the Kubernetes Events API and ships each event
+once, as it occurs, as a log. Events carry the *reason* a pod changed state —
+`OOMKilled`, `CrashLoopBackOff`, `FailedScheduling`, `Unhealthy` — which the
+cluster-state metrics cannot express on their own.
 
 Volume is low on a healthy cluster and spikes during incidents, which is
 precisely when you want them. Turn them off with:
