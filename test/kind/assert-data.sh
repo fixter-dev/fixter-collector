@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# `watch` mode only reports Events that occur after the receiver connects, and a
+# freshly installed kind cluster is idle. Generate a pod lifecycle deliberately so
+# there is something to observe, rather than depending on ambient cluster activity.
+PROBE="smoke-event-probe"
+cleanup() { kubectl delete pod "$PROBE" --ignore-not-found --wait=false >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+kubectl delete pod "$PROBE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+kubectl run "$PROBE" --image=busybox:1.36 --restart=Never -- sh -c 'echo smoke' >/dev/null
+
 echo "waiting up to 120s for telemetry to reach the sink..."
 for i in $(seq 1 24); do
   LOGS=$(kubectl exec deployment/otlp-sink -c reader -- cat /data/sink.log 2>/dev/null || true)
