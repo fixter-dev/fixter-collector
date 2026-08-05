@@ -75,9 +75,9 @@ data:
           exporters: [otlp_http]
         {{- if .Values.cluster.events }}
         logs:
-              receivers:
-                - k8s_objects
-              processors: [memory_limiter, resource_detection, resource, batch]
-              exporters: [otlp_http]
+          receivers:
+            - k8s_objects
+          processors: [memory_limiter, resource_detection, resource, batch]
+          exporters: [otlp_http]
         {{- end }}
 {{- end }}

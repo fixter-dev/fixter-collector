@@ -196,7 +196,7 @@ tests:
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "logs:\\n          receivers:\\n            - k8s_objects"
+          pattern: "logs:\\n      receivers:\\n        - k8s_objects"
 
   - it: omits the Events receiver and the logs pipeline when disabled
     template: configmap-cluster.yaml
