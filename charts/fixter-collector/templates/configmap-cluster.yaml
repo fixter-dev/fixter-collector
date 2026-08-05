@@ -20,6 +20,15 @@ data:
         auth_type: serviceAccount
         collection_interval: 30s
       {{- end }}
+      {{- if .Values.cluster.events }}
+      k8s_objects:
+        auth_type: serviceAccount
+        objects:
+          - name: events
+            mode: watch
+            exclude_watch_type:
+              - DELETED
+      {{- end }}
       {{- if .Values.integrations.prometheus.targets }}
       prometheus:
         config:
@@ -46,6 +55,35 @@ data:
       resource:
         attributes:
           {{- include "fixter-collector.resourceAttributes" . | nindent 10 }}
+      transform/k8s_identity:
+        error_mode: ignore
+        metric_statements:
+          - context: datapoint
+            statements:
+              - set(attributes["k8s.pod.name"], resource.attributes["k8s.pod.name"]) where resource.attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s.namespace.name"], resource.attributes["k8s.namespace.name"]) where resource.attributes["k8s.namespace.name"] != nil
+              - set(attributes["k8s.container.name"], resource.attributes["k8s.container.name"]) where resource.attributes["k8s.container.name"] != nil
+              - set(attributes["k8s.node.name"], resource.attributes["k8s.node.name"]) where resource.attributes["k8s.node.name"] != nil
+              - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
+              - set(attributes["k8s.statefulset.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"] != nil
+              - set(attributes["k8s.daemonset.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"] != nil
+      {{- if .Values.cluster.events }}
+      transform/k8s_event_identity:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - set(attributes["k8s.namespace.name"], body["object"]["involvedObject"]["namespace"]) where body["object"]["involvedObject"]["namespace"] != nil
+              - set(attributes["k8s.object.kind"], body["object"]["involvedObject"]["kind"]) where body["object"]["involvedObject"]["kind"] != nil
+              - set(attributes["k8s.object.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["name"] != nil
+              - set(attributes["k8s.event.reason"], body["object"]["reason"]) where body["object"]["reason"] != nil
+              - set(attributes["k8s.event.type"], body["object"]["type"]) where body["object"]["type"] != nil
+              - set(severity_text, "WARN") where body["object"]["type"] == "Warning"
+              - set(severity_text, "INFO") where body["object"]["type"] == "Normal"
+              - set(time, Time(body["object"]["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] != nil
+              - set(time, Time(body["object"]["eventTime"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] != nil
+              - set(time, Time(body["object"]["firstTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] == nil and body["object"]["firstTimestamp"] != nil
+      {{- end }}
       batch:
         timeout: 10s
     exporters:
@@ -64,6 +102,13 @@ data:
             {{- if .Values.integrations.prometheus.targets }}
             - prometheus
             {{- end }}
-          processors: [memory_limiter, resource_detection, resource, batch]
+          processors: [memory_limiter, resource_detection, resource, transform/k8s_identity, batch]
           exporters: [otlp_http]
+        {{- if .Values.cluster.events }}
+        logs:
+          receivers:
+            - k8s_objects
+          processors: [memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch]
+          exporters: [otlp_http]
+        {{- end }}
 {{- end }}
