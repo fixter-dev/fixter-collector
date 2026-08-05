@@ -49,12 +49,24 @@ cluster, ambiguous for more than one.
 | Component | Kind | Collects |
 |---|---|---|
 | `agent` | DaemonSet | kubelet + host metrics, pod logs, OTLP relay on `:4317`/`:4318` |
-| `cluster` | Deployment (1 replica) | cluster-state metrics, Prometheus targets |
+| `cluster` | Deployment (1 replica) | cluster-state metrics, Kubernetes Events, Prometheus targets |
 
 `cluster` runs exactly one replica and this is not configurable — its receivers
 duplicate their output per replica, so scaling it double-counts data. Both
 workloads tolerate all taints by default, so tainted nodes aren't silently
 skipped.
+
+### Kubernetes Events
+
+The cluster collector polls core Kubernetes Events and ships them as logs.
+Events carry the *reason* a pod changed state — `OOMKilled`,
+`CrashLoopBackOff`, `FailedScheduling`, `Unhealthy` — which the cluster-state
+metrics cannot express on their own.
+
+Volume is low on a healthy cluster and spikes during incidents, which is
+precisely when you want them. Turn them off with:
+
+    --set cluster.events=false
 
 ## Sending app telemetry
 
