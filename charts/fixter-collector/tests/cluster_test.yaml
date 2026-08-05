@@ -174,7 +174,7 @@ tests:
             resources: ["horizontalpodautoscalers"]
             verbs: ["get", "list", "watch"]
 
-  - it: watches core Kubernetes Events by default
+  - it: pulls core Kubernetes Events by default
     template: configmap-cluster.yaml
     set:
       fixter.apiKey: test-key-123
@@ -187,7 +187,10 @@ tests:
           pattern: "name: events"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "mode: watch"
+          pattern: "mode: pull"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "interval: 30s"
 
   - it: routes Events through a logs pipeline to the same exporter
     template: configmap-cluster.yaml
@@ -198,7 +201,19 @@ tests:
           path: data["config.yaml"]
           pattern: "logs:\\n      receivers:\\n        - k8s_objects"
 
-  - it: omits the Events receiver and the logs pipeline when disabled
+  - it: attaches involved-object identity and event reason to Event logs
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "transform/k8s_event_identity:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "processors: \\[memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch\\]"
+
+  - it: omits the Events receiver, the logs pipeline, and the event transform when disabled
     template: configmap-cluster.yaml
     set:
       fixter.apiKey: test-key-123
@@ -210,6 +225,9 @@ tests:
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "logs:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "transform/k8s_event_identity"
 
   - it: copies pod and workload identity onto metric datapoints
     template: configmap-cluster.yaml

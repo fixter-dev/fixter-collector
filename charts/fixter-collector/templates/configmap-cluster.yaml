@@ -25,7 +25,8 @@ data:
         auth_type: serviceAccount
         objects:
           - name: events
-            mode: watch
+            mode: pull
+            interval: 30s
       {{- end }}
       {{- if .Values.integrations.prometheus.targets }}
       prometheus:
@@ -65,6 +66,19 @@ data:
               - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
               - set(attributes["k8s.statefulset.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"] != nil
               - set(attributes["k8s.daemonset.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"] != nil
+      {{- if .Values.cluster.events }}
+      transform/k8s_event_identity:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - set(attributes["k8s.namespace.name"], body["involvedObject"]["namespace"]) where body["involvedObject"]["namespace"] != nil
+              - set(attributes["k8s.object.kind"], body["involvedObject"]["kind"]) where body["involvedObject"]["kind"] != nil
+              - set(attributes["k8s.object.name"], body["involvedObject"]["name"]) where body["involvedObject"]["name"] != nil
+              - set(attributes["k8s.event.reason"], body["reason"]) where body["reason"] != nil
+              - set(attributes["k8s.event.type"], body["type"]) where body["type"] != nil
+              - set(time, Time(body["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["lastTimestamp"] != nil
+      {{- end }}
       batch:
         timeout: 10s
     exporters:
@@ -89,7 +103,7 @@ data:
         logs:
           receivers:
             - k8s_objects
-          processors: [memory_limiter, resource_detection, resource, batch]
+          processors: [memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch]
           exporters: [otlp_http]
         {{- end }}
 {{- end }}
