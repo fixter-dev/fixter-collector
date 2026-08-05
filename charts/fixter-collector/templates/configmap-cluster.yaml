@@ -20,6 +20,13 @@ data:
         auth_type: serviceAccount
         collection_interval: 30s
       {{- end }}
+      {{- if .Values.cluster.events }}
+      k8s_objects:
+        auth_type: serviceAccount
+        objects:
+          - name: events
+            mode: watch
+      {{- end }}
       {{- if .Values.integrations.prometheus.targets }}
       prometheus:
         config:
@@ -66,4 +73,11 @@ data:
             {{- end }}
           processors: [memory_limiter, resource_detection, resource, batch]
           exporters: [otlp_http]
+        {{- if .Values.cluster.events }}
+        logs:
+              receivers:
+                - k8s_objects
+              processors: [memory_limiter, resource_detection, resource, batch]
+              exporters: [otlp_http]
+        {{- end }}
 {{- end }}

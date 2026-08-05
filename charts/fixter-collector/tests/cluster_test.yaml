@@ -173,3 +173,40 @@ tests:
             apiGroups: ["autoscaling"]
             resources: ["horizontalpodautoscalers"]
             verbs: ["get", "list", "watch"]
+
+  - it: watches core Kubernetes Events by default
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s_objects:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: events"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "mode: watch"
+
+  - it: routes Events through a logs pipeline to the same exporter
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:\\n          receivers:\\n            - k8s_objects"
+
+  - it: omits the Events receiver and the logs pipeline when disabled
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      cluster.events: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s_objects"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:"

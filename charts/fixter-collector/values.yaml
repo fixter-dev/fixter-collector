@@ -16,6 +16,7 @@ fixter:
 cluster:
   enabled: true
   clusterMetrics: true
+  events: true
   tolerations:
     - operator: Exists
   resources:
