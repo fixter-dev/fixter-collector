@@ -13,6 +13,9 @@ data:
       debug:
         verbosity: detailed
     service:
+      telemetry:
+        logs:
+          output_paths: ["/data/sink.log"]
       pipelines:
         metrics:
           receivers: [otlp]
@@ -41,9 +44,17 @@ spec:
             - containerPort: 4318
           volumeMounts:
             - {name: config, mountPath: /conf}
+            - {name: data, mountPath: /data}
+        - name: reader
+          image: busybox:1.36
+          command: ["sh", "-c", "sleep infinity"]
+          volumeMounts:
+            - {name: data, mountPath: /data}
       volumes:
         - name: config
           configMap: {name: otlp-sink}
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

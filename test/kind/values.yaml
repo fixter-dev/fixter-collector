@@ -8,12 +8,3 @@ fixter:
   endpoint: http://otlp-sink.default.svc.cluster.local:4318
   environment: ci
   clusterName: kind-ci
-
-# The sink prints every received record at verbosity: detailed. Without this
-# exclusion the agent tails the sink's own log and re-ingests it, amplifying
-# ~65x and — worse — making any grep assertion match the sink's own echoed
-# output instead of real telemetry.
-agent:
-  logs:
-    excludePods:
-      - otlp-sink
