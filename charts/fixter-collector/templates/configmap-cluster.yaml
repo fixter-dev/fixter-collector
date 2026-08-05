@@ -53,6 +53,18 @@ data:
       resource:
         attributes:
           {{- include "fixter-collector.resourceAttributes" . | nindent 10 }}
+      transform/k8s_identity:
+        error_mode: ignore
+        metric_statements:
+          - context: datapoint
+            statements:
+              - set(attributes["k8s.pod.name"], resource.attributes["k8s.pod.name"]) where resource.attributes["k8s.pod.name"] != nil
+              - set(attributes["k8s.namespace.name"], resource.attributes["k8s.namespace.name"]) where resource.attributes["k8s.namespace.name"] != nil
+              - set(attributes["k8s.container.name"], resource.attributes["k8s.container.name"]) where resource.attributes["k8s.container.name"] != nil
+              - set(attributes["k8s.node.name"], resource.attributes["k8s.node.name"]) where resource.attributes["k8s.node.name"] != nil
+              - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
+              - set(attributes["k8s.statefulset.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"] != nil
+              - set(attributes["k8s.daemonset.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"] != nil
       batch:
         timeout: 10s
     exporters:
@@ -71,7 +83,7 @@ data:
             {{- if .Values.integrations.prometheus.targets }}
             - prometheus
             {{- end }}
-          processors: [memory_limiter, resource_detection, resource, batch]
+          processors: [memory_limiter, resource_detection, resource, transform/k8s_identity, batch]
           exporters: [otlp_http]
         {{- if .Values.cluster.events }}
         logs:
