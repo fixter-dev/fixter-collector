@@ -26,6 +26,8 @@ data:
         objects:
           - name: events
             mode: watch
+            exclude_watch_type:
+              - DELETED
       {{- end }}
       {{- if .Values.integrations.prometheus.targets }}
       prometheus:

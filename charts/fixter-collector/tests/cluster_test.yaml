@@ -190,7 +190,13 @@ tests:
           pattern: "mode: watch"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "k8s_objects:\\n    auth_type: serviceAccount\\n    objects:\\n      - name: events\\n        mode: watch\\nprocessors:"
+          pattern: "exclude_watch_type:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- DELETED"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s_objects:\\n    auth_type: serviceAccount\\n    objects:\\n      - name: events\\n        mode: watch\\n        exclude_watch_type:\\n          - DELETED\\nprocessors:"
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "(?s)k8s_objects:.*?interval:.*?processors:\\n  memory_limiter:"
