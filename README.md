@@ -271,6 +271,8 @@ Mutually exclusive with `fixter.apiKey`.
 
 ## Scraping Prometheus endpoints
 
+For a handful of known endpoints, list them:
+
 ```yaml
 integrations:
   prometheus:
@@ -279,6 +281,38 @@ integrations:
         endpoints: ["my-service.default.svc.cluster.local:9090"]
         interval: 30s
 ```
+
+If you already run Prometheus, paste its `scrape_configs` in verbatim instead —
+service discovery, relabeling, keep/drop filters and all. This is the full
+upstream `prometheus` receiver, so anything valid in `prometheus.yml` works here:
+
+```yaml
+integrations:
+  prometheus:
+    scrapeConfigs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+```
+
+Both forms can be set together. The ClusterRole already grants the reads the
+`pod`, `service`, `node`, `endpoints`, `endpointslice` and `ingress` discovery
+roles need.
+
+Two things to keep in mind:
+
+- **`cluster` runs one replica and that is fixed**, so all scraping lands on a
+  single pod. That is fine for hundreds of targets and not for tens of thousands;
+  there is no target allocator in this chart.
+- **Relabel aggressively.** A pasted config ships everything your Prometheus
+  collects, and you pay for the cardinality. `keep`/`drop` rules come along in the
+  same config — use them.
+- If your Prometheus keeps running alongside this, targets get scraped twice.
+  That is load on the targets, not duplicated data in Fixter.
 
 ## Security
 
