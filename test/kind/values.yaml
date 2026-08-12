@@ -8,3 +8,23 @@ fixter:
   endpoint: http://otlp-sink.default.svc.cluster.local:4318
   environment: ci
   clusterName: kind-ci
+
+# Discovers the sink pod by annotation and scrapes its :8888 Prometheus endpoint.
+# Exercises the scrapeConfigs passthrough, pod service discovery and the RBAC it
+# needs — none of which chart unit tests can reach.
+integrations:
+  prometheus:
+    scrapeConfigs:
+      - job_name: kubernetes-pods
+        scrape_interval: 10s
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            action: keep
+            regex: "8888"
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod

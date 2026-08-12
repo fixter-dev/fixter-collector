@@ -282,9 +282,9 @@ integrations:
         interval: 30s
 ```
 
-If you already run Prometheus, paste its `scrape_configs` in verbatim instead —
-service discovery, relabeling, keep/drop filters and all. This is the full
-upstream `prometheus` receiver, so anything valid in `prometheus.yml` works here:
+If you already run Prometheus, hand its `scrape_configs` over instead — service
+discovery, relabeling and keep/drop filters all work, because this is the full
+upstream `prometheus` receiver:
 
 ```yaml
 integrations:
@@ -299,20 +299,43 @@ integrations:
             regex: "true"
 ```
 
-Both forms can be set together. The ClusterRole already grants the reads the
-`pod`, `service`, `node`, `endpoints`, `endpointslice` and `ingress` discovery
-roles need.
+Both forms can be set together, but a job name may not appear in both — the
+receiver rejects duplicate job names at startup, so the chart fails the install
+rather than letting the collector crash-loop.
 
-Two things to keep in mind:
+The ClusterRole already grants the reads the `pod`, `service`, `node`,
+`endpoints`, `endpointslice` and `ingress` discovery roles need.
 
-- **`cluster` runs one replica and that is fixed**, so all scraping lands on a
-  single pod. That is fine for hundreds of targets and not for tens of thousands;
-  there is no target allocator in this chart.
-- **Relabel aggressively.** A pasted config ships everything your Prometheus
-  collects, and you pay for the cardinality. `keep`/`drop` rules come along in the
-  same config — use them.
-- If your Prometheus keeps running alongside this, targets get scraped twice.
-  That is load on the targets, not duplicated data in Fixter.
+### What does not carry over
+
+**Anything that references a file on disk.** The `cluster` collector mounts only
+its own config, so `ca_file`, `cert_file`, `key_file` and `password_file` have
+nothing to point at, and a config using them will fail to scrape. The one
+exception is the ServiceAccount token, which Kubernetes automounts — so
+`bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token` works.
+Scraping a target behind a private CA is therefore not supported yet. An inline
+`basic_auth.password` does work, but it lands in a ConfigMap in plaintext, so
+prefer not to.
+
+**The `global:` block.** Only `scrape_configs` is passed through, so jobs that
+relied on a global `scrape_interval` fall back to the receiver's default. Set
+`scrape_interval` per job if the rate matters to you.
+
+### Sizing
+
+`cluster` runs one replica and that is fixed, so all scraping lands on a single
+pod with a 512Mi memory limit by default — and if it is pushed over, you lose
+cluster-state metrics and Kubernetes Events with it, not just the scrape. Raise
+`cluster.resources` when you add real scrape load, and treat a large fleet
+(thousands of targets) as out of scope for this chart: there is no target
+allocator to shard across replicas.
+
+Relabel aggressively while you are at it. A pasted config ships everything your
+Prometheus collects and you pay for the cardinality; `keep`/`drop` rules come
+along in the same config.
+
+If your Prometheus keeps running alongside this, targets get scraped twice. That
+is load on the targets, not duplicated data in Fixter.
 
 ## Security
 

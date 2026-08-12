@@ -16,6 +16,16 @@ data:
       telemetry:
         logs:
           output_paths: ["/data/sink.log"]
+        # Exposed so the collector under test has a real Prometheus endpoint to
+        # scrape. These otelcol_* series exist nowhere else in this cluster, so
+        # their arrival at the sink proves the scrape path end to end.
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
       pipelines:
         metrics:
           receivers: [otlp]
@@ -35,6 +45,8 @@ spec:
   template:
     metadata:
       labels: {app: otlp-sink}
+      annotations:
+        prometheus.io/scrape: "true"
     spec:
       containers:
         - name: sink
@@ -42,6 +54,7 @@ spec:
           args: ["--config=/conf/config.yaml"]
           ports:
             - containerPort: 4318
+            - containerPort: 8888
           volumeMounts:
             - {name: config, mountPath: /conf}
             - {name: data, mountPath: /data}

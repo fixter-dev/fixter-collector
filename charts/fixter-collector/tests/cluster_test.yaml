@@ -395,3 +395,18 @@ tests:
             apiGroups: ["networking.k8s.io"]
             resources: ["ingresses"]
             verbs: ["get", "list", "watch"]
+
+  - it: refuses a job name defined in both targets and scrapeConfigs
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+      integrations.prometheus.targets:
+        - job: clickhouse
+          endpoints: ["clickhouse.default.svc.cluster.local:9363"]
+      integrations.prometheus.scrapeConfigs:
+        - job_name: clickhouse
+          kubernetes_sd_configs:
+            - role: pod
+    asserts:
+      - failedTemplate:
+          errorPattern: "duplicate prometheus job name"
