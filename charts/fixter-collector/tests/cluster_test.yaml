@@ -309,3 +309,104 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "processors: \\[memory_limiter, resource_detection, resource, transform/k8s_identity, batch\\]"
+
+  - it: renders raw scrapeConfigs verbatim so an existing prometheus.yml can be pasted in
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      integrations.prometheus.scrapeConfigs:
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: "true"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "job_name: kubernetes-pods"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "kubernetes_sd_configs:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "__meta_kubernetes_pod_annotation_prometheus_io_scrape"
+
+  - it: enables the prometheus receiver from scrapeConfigs alone
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      integrations.prometheus.scrapeConfigs:
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\n  prometheus:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- prometheus"
+
+  - it: keeps static targets working alongside raw scrapeConfigs
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      integrations.prometheus.targets:
+        - job: clickhouse
+          endpoints: ["clickhouse.default.svc.cluster.local:9363"]
+      integrations.prometheus.scrapeConfigs:
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'job_name: "clickhouse"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "job_name: kubernetes-pods"
+
+  - it: omits the prometheus receiver when neither form is set
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\n  prometheus:"
+
+  - it: grants the endpoint discovery roles service discovery needs
+    template: rbac.yaml
+    documentIndex: 0
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["discovery.k8s.io"]
+            resources: ["endpointslices"]
+            verbs: ["get", "list", "watch"]
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["networking.k8s.io"]
+            resources: ["ingresses"]
+            verbs: ["get", "list", "watch"]
+
+  - it: refuses a job name defined in both targets and scrapeConfigs
+    template: secret.yaml
+    set:
+      fixter.apiKey: test-key-123
+      integrations.prometheus.targets:
+        - job: clickhouse
+          endpoints: ["clickhouse.default.svc.cluster.local:9363"]
+      integrations.prometheus.scrapeConfigs:
+        - job_name: clickhouse
+          kubernetes_sd_configs:
+            - role: pod
+    asserts:
+      - failedTemplate:
+          errorPattern: "duplicate prometheus job name"

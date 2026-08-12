@@ -29,7 +29,7 @@ data:
             exclude_watch_type:
               - DELETED
       {{- end }}
-      {{- if .Values.integrations.prometheus.targets }}
+      {{- if or .Values.integrations.prometheus.targets .Values.integrations.prometheus.scrapeConfigs }}
       prometheus:
         config:
           scrape_configs:
@@ -41,6 +41,9 @@ data:
                     {{- range .endpoints }}
                     - {{ . | quote }}
                     {{- end }}
+            {{- end }}
+            {{- with .Values.integrations.prometheus.scrapeConfigs }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
       {{- end }}
     processors:
@@ -99,7 +102,7 @@ data:
             {{- if .Values.cluster.clusterMetrics }}
             - k8s_cluster
             {{- end }}
-            {{- if .Values.integrations.prometheus.targets }}
+            {{- if or .Values.integrations.prometheus.targets .Values.integrations.prometheus.scrapeConfigs }}
             - prometheus
             {{- end }}
           processors: [memory_limiter, resource_detection, resource, transform/k8s_identity, batch]

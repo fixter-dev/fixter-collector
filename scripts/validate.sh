@@ -20,3 +20,12 @@ helm template t charts/fixter-collector --set fixter.apiKey=dummy \
   > /tmp/cfg-cluster.yaml
 FIXTER_API_KEY=dummy "$BIN" validate --config file:/tmp/cfg-cluster.yaml
 echo "validate: cluster config OK"
+
+# integrations.prometheus.scrapeConfigs is a verbatim passthrough, so nothing in the
+# chart can tell a well-indented block from a structurally wrong one. Only the real
+# receiver can. Renders both scrape forms together and constructs them for real.
+helm template t charts/fixter-collector -f test/scrape-values.yaml \
+  | yq 'select(.kind=="ConfigMap" and (.metadata.name|test("cluster"))) | .data."config.yaml"' \
+  > /tmp/cfg-cluster-scrape.yaml
+FIXTER_API_KEY=dummy "$BIN" validate --config file:/tmp/cfg-cluster-scrape.yaml
+echo "validate: cluster config with prometheus scrape configs OK"

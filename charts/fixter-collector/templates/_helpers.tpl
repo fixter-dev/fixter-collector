@@ -53,6 +53,20 @@ FIXTER_API_KEY
 {{- fail "fixter.endpoint must not be empty" -}}
 {{- end -}}
 {{- include "fixter-collector.rejectLegacyParsing" . -}}
+{{- include "fixter-collector.rejectDuplicateScrapeJobs" . -}}
+{{- end -}}
+
+{{- define "fixter-collector.rejectDuplicateScrapeJobs" -}}
+{{- $names := list -}}
+{{- range .Values.integrations.prometheus.targets -}}
+{{- $names = append $names .job -}}
+{{- end -}}
+{{- range .Values.integrations.prometheus.scrapeConfigs -}}
+{{- $names = append $names .job_name -}}
+{{- end -}}
+{{- if ne (len $names) (len (uniq $names)) -}}
+{{- fail "duplicate prometheus job name across integrations.prometheus.targets and integrations.prometheus.scrapeConfigs. The receiver rejects duplicate job names at startup, so the collector would crash-loop rather than merge them — rename one." -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "fixter-collector.rejectLegacyParsing" -}}

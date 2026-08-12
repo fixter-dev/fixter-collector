@@ -271,6 +271,8 @@ Mutually exclusive with `fixter.apiKey`.
 
 ## Scraping Prometheus endpoints
 
+For a handful of known endpoints, list them:
+
 ```yaml
 integrations:
   prometheus:
@@ -279,6 +281,68 @@ integrations:
         endpoints: ["my-service.default.svc.cluster.local:9090"]
         interval: 30s
 ```
+
+If you already run Prometheus, hand its `scrape_configs` over instead — service
+discovery, relabeling and keep/drop filters all work, because this is the full
+upstream `prometheus` receiver:
+
+```yaml
+integrations:
+  prometheus:
+    scrapeConfigs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+```
+
+Both forms can be set together, but a job name may not appear in both — the
+receiver rejects duplicate job names at startup, so the chart fails the install
+rather than letting the collector crash-loop.
+
+The ClusterRole already grants the reads the `pod`, `service`, `node`,
+`endpoints`, `endpointslice` and `ingress` discovery roles need.
+
+### What does not carry over
+
+**Anything that references a file on disk.** The `cluster` collector mounts only
+its own config, so `ca_file`, `cert_file`, `key_file` and `password_file` have
+nothing to point at, and a config using them will fail to scrape. The one
+exception is the ServiceAccount token, which Kubernetes automounts — so
+`bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token` works.
+Scraping a target behind a private CA is therefore not supported yet. An inline
+`basic_auth.password` does work, but it lands in a ConfigMap in plaintext, so
+prefer not to.
+
+**The `global:` block.** Only `scrape_configs` is passed through, so jobs that
+relied on a global `scrape_interval` fall back to the receiver's default. Set
+`scrape_interval` per job if the rate matters to you.
+
+### Sizing
+
+`cluster` runs one replica and that is fixed, so all scraping lands on a single
+pod with a 512Mi memory limit by default. `memory_limiter` and `GOMEMLIMIT` mean
+sustained pressure sheds data rather than killing the pod, but it sheds across
+*every* pipeline in that pod — push the scrape hard enough and cluster-state
+metrics and Kubernetes Events thin out with it. Raise `cluster.resources` when
+you add real scrape load, and treat a large fleet (thousands of targets) as out
+of scope for this chart: there is no target allocator to shard across replicas.
+
+One replica is not unusual — a single Prometheus is the normal topology, and a
+rollout gap here is the same gap you already have there. What is different is
+that this collector has **no persistent queue**: if Fixter is unreachable for
+longer than the exporter's retry window, or the pod restarts, the in-flight data
+is gone. A Prometheus doing `remote_write` replays from its WAL instead.
+
+Relabel aggressively while you are at it. A pasted config ships everything your
+Prometheus collects and you pay for the cardinality; `keep`/`drop` rules come
+along in the same config.
+
+If your Prometheus keeps running alongside this, targets get scraped twice. That
+is load on the targets, not duplicated data in Fixter.
 
 ## Security
 

@@ -41,6 +41,7 @@ securityContext:
 integrations:
   prometheus:
     targets: []
+    scrapeConfigs: []
 
 agent:
   enabled: true
