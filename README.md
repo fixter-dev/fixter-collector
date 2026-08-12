@@ -324,11 +324,18 @@ relied on a global `scrape_interval` fall back to the receiver's default. Set
 ### Sizing
 
 `cluster` runs one replica and that is fixed, so all scraping lands on a single
-pod with a 512Mi memory limit by default — and if it is pushed over, you lose
-cluster-state metrics and Kubernetes Events with it, not just the scrape. Raise
-`cluster.resources` when you add real scrape load, and treat a large fleet
-(thousands of targets) as out of scope for this chart: there is no target
-allocator to shard across replicas.
+pod with a 512Mi memory limit by default. `memory_limiter` and `GOMEMLIMIT` mean
+sustained pressure sheds data rather than killing the pod, but it sheds across
+*every* pipeline in that pod — push the scrape hard enough and cluster-state
+metrics and Kubernetes Events thin out with it. Raise `cluster.resources` when
+you add real scrape load, and treat a large fleet (thousands of targets) as out
+of scope for this chart: there is no target allocator to shard across replicas.
+
+One replica is not unusual — a single Prometheus is the normal topology, and a
+rollout gap here is the same gap you already have there. What is different is
+that this collector has **no persistent queue**: if Fixter is unreachable for
+longer than the exporter's retry window, or the pod restarts, the in-flight data
+is gone. A Prometheus doing `remote_write` replays from its WAL instead.
 
 Relabel aggressively while you are at it. A pasted config ships everything your
 Prometheus collects and you pay for the cardinality; `keep`/`drop` rules come
