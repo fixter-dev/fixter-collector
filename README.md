@@ -44,10 +44,9 @@ contains a binary of the correct architecture, not just that one runs, so a
 wrong-architecture image does not sit on `main` unnoticed.
 
 If you run an architecture we don't publish (ppc64le, s390x, riscv64 — all of
-which upstream's k8s distro does ship), open an issue: adding one is a
-one-word edit to the `ARCHES` list in both `.github/workflows/ci.yml` and
-`.github/workflows/release.yml` (kept in sync between them), and the binary
-cross-compiles cleanly because it's pure-Go and static.
+which upstream's k8s distro does ship), open an issue: the binary cross-compiles
+cleanly because it's pure-Go and static, and adding an arch is a small,
+mechanical change to our CI and release workflows rather than new build work.
 
 ## Multiple clusters
 

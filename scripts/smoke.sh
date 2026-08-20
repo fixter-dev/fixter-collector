@@ -14,8 +14,10 @@ TAG="${TAG:-dev}"
 CLUSTER="${CLUSTER:-fixter-smoke}"
 
 ./scripts/build.sh
-# Explicit TARGETARCH: the classic builder does not populate it, and an empty
-# value turns the Dockerfile COPY into a path that does not exist.
+# The Dockerfile's `FROM --platform=$BUILDPLATFORM` requires BuildKit (a
+# classic-builder build dies right there), and under BuildKit TARGETARCH is
+# already auto-populated. It's still passed explicitly so the selected arch
+# is pinned and visible here rather than left implicit in the host's default.
 case "$(uname -m)" in
   x86_64)        HOST_ARCH=amd64 ;;
   aarch64|arm64) HOST_ARCH=arm64 ;;
