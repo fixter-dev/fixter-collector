@@ -11,10 +11,16 @@ permissions:
 env:
   GO_VERSION: '1.26.5'
   HELM_VERSION: 'v3.21.3'
+  # The released architecture set. Adding one is a one-word edit here — the build
+  # loop and the --platform string are both derived from it. Upstream's k8s distro
+  # also ships ppc64le/riscv64/s390x; we do not, because no customer has asked and
+  # GitHub hosts no runner for them (so they could never be smoke-tested natively).
+  ARCHES: 'amd64 arm64'
 
 jobs:
   release:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40   # compiles once per arch (~7.5 min each) plus image assembly
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: actions/setup-go@v6.5.0
@@ -33,14 +39,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4.3.0
 
-      - name: Build and push the image
+      - name: Build and push the multi-arch image
         env:
           TAG: ${{ steps.v.outputs.version }}
         run: |
-          ./scripts/build.sh
-          docker build -t "ghcr.io/fixter-dev/fixter-collector:${TAG}" .
-          docker push "ghcr.io/fixter-dev/fixter-collector:${TAG}"
+          platforms=""
+          for arch in ${ARCHES}; do
+            TARGET_ARCH="$arch" ./scripts/build.sh
+            platforms="${platforms:+$platforms,}linux/$arch"
+          done
+          echo "building $platforms"
+          docker buildx build \
+            --platform "$platforms" \
+            -t "ghcr.io/fixter-dev/fixter-collector:${TAG}" \
+            --push .
 
       - name: Package and push the chart
         run: |
