@@ -14,7 +14,14 @@ TAG="${TAG:-dev}"
 CLUSTER="${CLUSTER:-fixter-smoke}"
 
 ./scripts/build.sh
-docker build -t "${IMAGE}:${TAG}" .
+# Explicit TARGETARCH: the classic builder does not populate it, and an empty
+# value turns the Dockerfile COPY into a path that does not exist.
+case "$(uname -m)" in
+  x86_64)        HOST_ARCH=amd64 ;;
+  aarch64|arm64) HOST_ARCH=arm64 ;;
+  *) echo "smoke.sh: unsupported host $(uname -m)" >&2; exit 1 ;;
+esac
+docker build --build-arg TARGETARCH="${HOST_ARCH}" -t "${IMAGE}:${TAG}" .
 kind load docker-image "${IMAGE}:${TAG}" --name "${CLUSTER}"
 
 kubectl apply -f test/kind/sink.yaml
