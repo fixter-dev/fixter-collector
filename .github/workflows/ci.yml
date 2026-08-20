@@ -67,6 +67,10 @@ jobs:
         # image and is what actually proves the arch is right — do not drop
         # either check, they catch different failure modes.
         run: |
+          # An empty/unset ARCHES makes the loop below run zero times and exit 0 —
+          # a silent no-op, not a pass. That is the same failure shape this guard
+          # exists to catch, so treat it as a hard error, never a vacuous pass.
+          [ -n "${ARCHES:-}" ] || { echo "ARCHES is empty — the arch guard would silently pass"; exit 1; }
           for arch in ${ARCHES}; do
             TARGET_ARCH="$arch" ./scripts/build.sh
             docker buildx build --platform "linux/$arch" --load \
@@ -81,7 +85,10 @@ jobs:
             cid=$(docker create --platform "linux/$arch" "fixter-collector:$arch-check")
             docker cp "$cid:/fixter-collector" "/tmp/check-$arch"
             docker rm "$cid"
-            file "/tmp/check-$arch" | grep -q "$want" || {
+            # -b (brief) omits the filename: the temp filename embeds "$arch" and
+            # the binary carries a random Go BuildID, either of which could
+            # coincidentally contain $want and make grep match vacuously.
+            file -b "/tmp/check-$arch" | grep -q "$want" || {
               echo "$arch image contains the wrong binary:"; file "/tmp/check-$arch"; exit 1; }
             echo "$arch OK"
           done
