@@ -59,6 +59,13 @@ jobs:
         # A customer hit `exec /fixter-collector: exec format error` because the
         # image was arm64-only. Compiling for an arch proves nothing about the
         # image; this actually RUNS each arch's binary out of its own image layer.
+        # The run check alone is not enough: on an arm64 CI runner, an arm64
+        # binary mislabeled as amd64 will still exec successfully (the kernel
+        # dispatches on the binary's own ELF machine type, not the image's
+        # declared platform), so a mismatched binary can silently pass the run
+        # check. The ELF check below inspects the actual bytes copied into each
+        # image and is what actually proves the arch is right — do not drop
+        # either check, they catch different failure modes.
         run: |
           for arch in ${ARCHES}; do
             TARGET_ARCH="$arch" ./scripts/build.sh
@@ -66,6 +73,16 @@ jobs:
               -t "fixter-collector:$arch-check" .
             docker run --rm --platform "linux/$arch" "fixter-collector:$arch-check" \
               --version | grep -qx 'fixter-collector version 0.1.0'
+            case "$arch" in
+              amd64) want='x86-64' ;;
+              arm64) want='aarch64' ;;
+              *) echo "no ELF machine mapping for $arch"; exit 1 ;;
+            esac
+            cid=$(docker create --platform "linux/$arch" "fixter-collector:$arch-check")
+            docker cp "$cid:/fixter-collector" "/tmp/check-$arch"
+            docker rm "$cid"
+            file "/tmp/check-$arch" | grep -q "$want" || {
+              echo "$arch image contains the wrong binary:"; file "/tmp/check-$arch"; exit 1; }
             echo "$arch OK"
           done
       - name: Assert the component set and versions
