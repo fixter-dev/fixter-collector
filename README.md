@@ -39,10 +39,9 @@ The published image (`ghcr.io/fixter-dev/fixter-collector`) is a multi-arch
 manifest covering `linux/amd64` and `linux/arm64`; your nodes pull the
 matching one automatically, so mixed-arch clusters need no configuration.
 
-Both platforms are built and checked on every push to main — CI verifies each
-image actually contains a binary of the correct architecture, not just that
-one runs, so a wrong-architecture binary is caught before it's ever tagged
-for release.
+Every push to `main` builds both platforms and verifies each image actually
+contains a binary of the correct architecture, not just that one runs, so a
+wrong-architecture image does not sit on `main` unnoticed.
 
 If you run an architecture we don't publish (ppc64le, s390x, riscv64 — all of
 which upstream's k8s distro does ship), open an issue: adding one is a
