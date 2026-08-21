@@ -14,7 +14,16 @@ TAG="${TAG:-dev}"
 CLUSTER="${CLUSTER:-fixter-smoke}"
 
 ./scripts/build.sh
-docker build -t "${IMAGE}:${TAG}" .
+# The Dockerfile's `FROM --platform=$BUILDPLATFORM` requires BuildKit (a
+# classic-builder build dies right there), and under BuildKit TARGETARCH is
+# already auto-populated. It's still passed explicitly so the selected arch
+# is pinned and visible here rather than left implicit in the host's default.
+case "$(uname -m)" in
+  x86_64)        HOST_ARCH=amd64 ;;
+  aarch64|arm64) HOST_ARCH=arm64 ;;
+  *) echo "smoke.sh: unsupported host $(uname -m)" >&2; exit 1 ;;
+esac
+docker build --build-arg TARGETARCH="${HOST_ARCH}" -t "${IMAGE}:${TAG}" .
 kind load docker-image "${IMAGE}:${TAG}" --name "${CLUSTER}"
 
 kubectl apply -f test/kind/sink.yaml

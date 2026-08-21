@@ -11,10 +11,19 @@ permissions:
 env:
   GO_VERSION: '1.26.5'
   HELM_VERSION: 'v3.21.3'
+  # The released architecture set. The build loop and the --platform string are
+  # both derived from it, but adding an arch is a THREE-place edit, not one:
+  # this list, ARCHES in ci.yml (kept in sync), and a new case arm in ci.yml's
+  # ELF-machine guard (`no ELF machine mapping for <arch>` otherwise). Upstream's
+  # k8s distro also ships ppc64le/riscv64/s390x; we do not, because no customer
+  # has asked and GitHub hosts no runner for them (so they could never be
+  # smoke-tested natively).
+  ARCHES: 'amd64 arm64'
 
 jobs:
   release:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40   # compiles once per arch (~7.5 min each) plus image assembly
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: actions/setup-go@v6.5.0
@@ -33,14 +42,42 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4.3.0
 
-      - name: Build and push the image
+      - name: Build and push the multi-arch image
         env:
           TAG: ${{ steps.v.outputs.version }}
         run: |
-          ./scripts/build.sh
-          docker build -t "ghcr.io/fixter-dev/fixter-collector:${TAG}" .
-          docker push "ghcr.io/fixter-dev/fixter-collector:${TAG}"
+          platforms=""
+          for arch in ${ARCHES}; do
+            TARGET_ARCH="$arch" ./scripts/build.sh
+            platforms="${platforms:+$platforms,}linux/$arch"
+          done
+          echo "building $platforms"
+          docker buildx build \
+            --platform "$platforms" \
+            -t "ghcr.io/fixter-dev/fixter-collector:${TAG}" \
+            --push .
+
+      # release.yml is the only path that produces the customer-facing image
+      # and it never inspected what it pushed. CI's ELF guard doesn't run on
+      # tags, so if build.sh regressed, or ARCHES were edited here but not in
+      # ci.yml, buildx would still find files, still label them, and still
+      # push — republishing the exact wrong-architecture defect this whole
+      # branch exists to fix, with nothing to catch it. Do not delete this as
+      # "redundant with CI" — it is the only check on the release path itself.
+      - name: Assert the pushed manifest covers every arch
+        env:
+          TAG: ${{ steps.v.outputs.version }}
+        run: |
+          # An empty/unset ARCHES would make the loop below run zero times and
+          # exit 0 — a silent no-op, not a pass. Treat that as a hard error.
+          [ -n "${ARCHES:-}" ] || { echo "ARCHES is empty — this guard would silently pass"; exit 1; }
+          docker buildx imagetools inspect "ghcr.io/fixter-dev/fixter-collector:${TAG}" \
+            --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' > /tmp/pl
+          for arch in ${ARCHES}; do
+            grep -qx "linux/$arch" /tmp/pl || { echo "missing linux/$arch"; cat /tmp/pl; exit 1; }
+          done
 
       - name: Package and push the chart
         run: |

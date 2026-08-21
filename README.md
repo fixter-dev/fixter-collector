@@ -32,6 +32,21 @@ POSTs an empty metrics payload and checks the HTTP status). It does **not** prov
 every export succeeds — a collector that fails exports for some other reason (bad
 downstream, TLS, quota) still reports healthy.
 
+### Supported architectures
+
+The published image (`ghcr.io/fixter-dev/fixter-collector`) is a multi-arch
+manifest covering `linux/amd64` and `linux/arm64`; your nodes pull the
+matching one automatically, so mixed-arch clusters need no configuration.
+
+Every push to `main` builds both platforms and verifies each image actually
+contains a binary of the correct architecture, not just that one runs, so a
+wrong-architecture image does not sit on `main` unnoticed.
+
+If you run an architecture we don't publish (ppc64le, s390x, riscv64 — all of
+which upstream's k8s distro does ship), open an issue: the binary cross-compiles
+cleanly because it's pure-Go and static, and adding an arch is a small,
+mechanical change to our CI and release workflows rather than new build work.
+
 ## Multiple clusters
 
 `fixter.clusterName` is **not auto-detected** — there is no EKS/AKS/GKE lookup.
