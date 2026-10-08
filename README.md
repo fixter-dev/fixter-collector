@@ -1,5 +1,7 @@
 # fixter-collector
 
+[Fixter](https://fixter.dev) catches the errors and bugs in your app in production, finds the root cause, and fixes them: in your coding agent over MCP, or as a pull request ready for your review. Error tracking, logs and uptime monitoring for small teams.
+
 A Fixter OpenTelemetry Collector distribution and Helm chart. Collects Kubernetes
 metrics and pod logs, relays your apps' OTLP, and ships it all to Fixter.
 
