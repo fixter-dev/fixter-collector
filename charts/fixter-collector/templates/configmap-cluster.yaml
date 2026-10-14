@@ -81,11 +81,48 @@ data:
               - set(attributes["k8s.object.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["name"] != nil
               - set(attributes["k8s.event.reason"], body["object"]["reason"]) where body["object"]["reason"] != nil
               - set(attributes["k8s.event.type"], body["object"]["type"]) where body["object"]["type"] != nil
+              - set(resource.attributes["k8s.pod.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["kind"] == "Pod"
+              - set(resource.attributes["k8s.namespace.name"], body["object"]["involvedObject"]["namespace"]) where body["object"]["involvedObject"]["kind"] == "Pod"
               - set(severity_text, "WARN") where body["object"]["type"] == "Warning"
               - set(severity_text, "INFO") where body["object"]["type"] == "Normal"
               - set(time, Time(body["object"]["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] != nil
               - set(time, Time(body["object"]["eventTime"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] != nil
               - set(time, Time(body["object"]["firstTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] == nil and body["object"]["eventTime"] == nil and body["object"]["firstTimestamp"] != nil
+      k8s_attributes:
+        auth_type: serviceAccount
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.deployment.name
+            - k8s.statefulset.name
+            - k8s.daemonset.name
+            - k8s.cronjob.name
+            - k8s.job.name
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.name
+              - from: resource_attribute
+                name: k8s.namespace.name
+      transform/k8s_event_service:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - set(attributes["k8s.workload.name"], body["object"]["involvedObject"]["name"]) where IsMatch(body["object"]["involvedObject"]["kind"], "^(Pod|ReplicaSet|Deployment|StatefulSet|DaemonSet|CronJob|Job)$")
+              - replace_pattern(attributes["k8s.workload.name"], "-[bcdfghjklmnpqrstvwxz2456789]{5}$", "") where body["object"]["involvedObject"]["kind"] == "Pod"
+              - replace_pattern(attributes["k8s.workload.name"], "-[0-9]+$", "") where body["object"]["involvedObject"]["kind"] == "Pod"
+              - replace_pattern(attributes["k8s.workload.name"], "-[bcdfghjklmnpqrstvwxz2456789]{6,10}$", "") where IsMatch(body["object"]["involvedObject"]["kind"], "^(Pod|ReplicaSet)$")
+              - set(resource.attributes["service.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
+              - set(resource.attributes["service.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.statefulset.name"] != nil
+              - set(resource.attributes["service.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.daemonset.name"] != nil
+              - set(resource.attributes["service.name"], resource.attributes["k8s.cronjob.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.cronjob.name"] != nil
+              - set(resource.attributes["service.name"], resource.attributes["k8s.job.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.job.name"] != nil
+              - set(resource.attributes["service.name"], attributes["k8s.workload.name"]) where resource.attributes["service.name"] == nil and attributes["k8s.workload.name"] != nil
+              - set(resource.attributes["service.name"], "kubernetes") where resource.attributes["service.name"] == nil
+              - set(resource.attributes["service.namespace"], attributes["k8s.namespace.name"]) where attributes["k8s.namespace.name"] != nil
+              - set(attributes["k8s.event.count"], body["object"]["count"]) where body["object"]["count"] != nil
+              - set(body, body["object"]["message"]) where body["object"]["message"] != nil
       {{- end }}
       batch:
         timeout: 10s
@@ -111,7 +148,7 @@ data:
         logs:
           receivers:
             - k8s_objects
-          processors: [memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch]
+          processors: [memory_limiter, transform/k8s_event_identity, k8s_attributes, resource_detection, resource, transform/k8s_event_service, batch]
           exporters: [otlp_http]
         {{- end }}
 {{- end }}
