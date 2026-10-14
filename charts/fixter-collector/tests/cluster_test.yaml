@@ -220,7 +220,7 @@ tests:
           pattern: "transform/k8s_event_identity:"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "processors: \\[memory_limiter, resource_detection, resource, transform/k8s_event_identity, batch\\]"
+          pattern: "processors: \\[memory_limiter, transform/k8s_event_identity, k8s_attributes, resource_detection, resource, transform/k8s_event_service, batch\\]"
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'set\(attributes\["k8s.namespace.name"\], body\["object"\]\["involvedObject"\]\["namespace"\]\) where body\["object"\]\["involvedObject"\]\["namespace"\] != nil'
@@ -252,6 +252,84 @@ tests:
           path: data["config.yaml"]
           pattern: 'set\(time, Time\(body\["object"\]\["firstTimestamp"\], "%Y-%m-%dT%H:%M:%SZ"\)\) where body\["object"\]\["lastTimestamp"\] == nil and body\["object"\]\["eventTime"\] == nil and body\["object"\]\["firstTimestamp"\] != nil'
 
+  - it: resolves Pod events to their workload through k8s_attributes
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["k8s.pod.name"\], body\["object"\]\["involvedObject"\]\["name"\]\) where body\["object"\]\["involvedObject"\]\["kind"\] == "Pod"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["k8s.namespace.name"\], body\["object"\]\["involvedObject"\]\["namespace"\]\) where body\["object"\]\["involvedObject"\]\["kind"\] == "Pod"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s_attributes:\\n    auth_type: serviceAccount\\n    passthrough: false\\n    extract:\\n      metadata:\\n        - k8s.deployment.name\\n        - k8s.statefulset.name\\n        - k8s.daemonset.name\\n        - k8s.cronjob.name\\n        - k8s.job.name\\n    pod_association:\\n      - sources:\\n          - from: resource_attribute\\n            name: k8s.pod.name\\n          - from: resource_attribute\\n            name: k8s.namespace.name\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "node_from_env_var"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "processors: \\[memory_limiter, transform/k8s_event_identity, k8s_attributes, resource_detection, resource, transform/k8s_event_service, batch\\]"
+
+  - it: names an Event's service after its workload, falling back to kubernetes
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.workload.name"\], body\["object"\]\["involvedObject"\]\["name"\]\) where IsMatch\(body\["object"\]\["involvedObject"\]\["kind"\], "\^\(Pod\|ReplicaSet\|Deployment\|StatefulSet\|DaemonSet\|CronJob\|Job\)\$"\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'replace_pattern\(attributes\["k8s.workload.name"\], "-\[bcdfghjklmnpqrstvwxz2456789\]\{5\}\$", ""\) where body\["object"\]\["involvedObject"\]\["kind"\] == "Pod"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'replace_pattern\(attributes\["k8s.workload.name"\], "-\[0-9\]\+\$", ""\) where body\["object"\]\["involvedObject"\]\["kind"\] == "Pod"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'replace_pattern\(attributes\["k8s.workload.name"\], "-\[bcdfghjklmnpqrstvwxz2456789\]\{6,10\}\$", ""\) where IsMatch\(body\["object"\]\["involvedObject"\]\["kind"\], "\^\(Pod\|ReplicaSet\)\$"\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.deployment.name"\]\) where resource.attributes\["k8s.deployment.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.statefulset.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.statefulset.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.daemonset.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.daemonset.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.cronjob.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.cronjob.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.job.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.job.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], attributes\["k8s.workload.name"\]\) where resource.attributes\["service.name"\] == nil and attributes\["k8s.workload.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], "kubernetes"\) where resource.attributes\["service.name"\] == nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.namespace"\], attributes\["k8s.namespace.name"\]\) where attributes\["k8s.namespace.name"\] != nil\n'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: '(?s)transform/k8s_event_service:.*k8s.deployment.name.*k8s.statefulset.name.*k8s.daemonset.name.*k8s.cronjob.name.*k8s.job.name.*k8s.workload.name"\] != nil.*"kubernetes".*service.namespace'
+
+  - it: replaces the raw watch JSON body of an Event with its message, last
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.event.count"\], body\["object"\]\["count"\]\) where body\["object"\]\["count"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(body, body\["object"\]\["message"\]\) where body\["object"\]\["message"\] != nil\n  batch:'
+
   - it: omits the Events receiver, the logs pipeline, and the event transform when disabled
     template: configmap-cluster.yaml
     set:
@@ -267,6 +345,12 @@ tests:
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "transform/k8s_event_identity"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "transform/k8s_event_service"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "k8s_attributes"
 
   - it: copies pod and workload identity onto metric datapoints
     template: configmap-cluster.yaml

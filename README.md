@@ -78,6 +78,20 @@ once, as it occurs, as a log. Events carry the *reason* a pod changed state —
 `OOMKilled`, `CrashLoopBackOff`, `FailedScheduling`, `Unhealthy` — which the
 cluster-state metrics cannot express on their own.
 
+Each event arrives as a log whose body is the event's message, with the
+reason, type, count and involved object (`k8s.event.reason`, `k8s.event.type`,
+`k8s.event.count`, `k8s.object.kind`, `k8s.object.name`, `k8s.namespace.name`)
+as attributes. Warning events are WARN, Normal events are INFO.
+
+Events are attributed to the same service as the pod's own logs, so an
+`OOMKilled` on a pod of the `checkout` deployment shows up under `checkout`.
+A Pod event is resolved to its owning workload through the Kubernetes API,
+the same way the agent names pod logs. An event on a workload object names
+that workload directly; a ReplicaSet drops its template hash; a pod the
+collector no longer knows about has its `-<hash>-<suffix>` or `-<ordinal>`
+stripped. Node, NodeClaim and other cluster-scoped events land under the
+service `kubernetes`.
+
 Volume is low on a healthy cluster and spikes during incidents, which is
 precisely when you want them. Turn them off with:
 
@@ -99,7 +113,8 @@ Traffic stays on the node (`internalTrafficPolicy: Local`).
 
 Fixter groups every signal by service, but pod logs and kubelet/pod metrics carry
 no `service.name` of their own. The agent fills the service-identity triad —
-`service.name` (from the k8s deployment, falling back to the container name),
+`service.name` (from the owning Deployment, StatefulSet, DaemonSet, CronJob or
+Job, in that order, falling back to the container name),
 `service.namespace` (from the k8s namespace), and `service.instance.id` (from the
 pod name) — from the Kubernetes metadata it already attaches. This only ever
 *fills a missing* value: telemetry your apps relay keeps the `service.name` they
