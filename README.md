@@ -122,6 +122,13 @@ pod name) — from the Kubernetes metadata it already attaches. This only ever
 *fills a missing* value: telemetry your apps relay keeps the `service.name` they
 set, and node/host metrics stay serviceless (as infra metrics should).
 
+To name a workload yourself, annotate its pod template with
+`resource.opentelemetry.io/service.name: <name>`. The annotation wins over the
+derived name for pod logs, pod metrics and Kubernetes Events, while
+`k8s.job.name`, `k8s.pod.name` and the rest still identify each pod. Any other
+`resource.opentelemetry.io/<key>` annotation likewise becomes resource
+attribute `<key>`. Pods without such annotations keep exactly the derived names.
+
 ## Log volume
 
 Pod logs are on by default. `kube-system` and the collector's own pods are

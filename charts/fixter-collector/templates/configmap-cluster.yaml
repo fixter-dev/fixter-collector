@@ -92,6 +92,7 @@ data:
         auth_type: serviceAccount
         passthrough: false
         extract:
+          otel_annotations: true
           metadata:
             - k8s.deployment.name
             - k8s.statefulset.name
@@ -113,7 +114,7 @@ data:
               - replace_pattern(attributes["k8s.workload.name"], "-[bcdfghjklmnpqrstvwxz2456789]{5}$", "") where body["object"]["involvedObject"]["kind"] == "Pod"
               - replace_pattern(attributes["k8s.workload.name"], "-[0-9]+$", "") where body["object"]["involvedObject"]["kind"] == "Pod"
               - replace_pattern(attributes["k8s.workload.name"], "-[bcdfghjklmnpqrstvwxz2456789]{6,10}$", "") where IsMatch(body["object"]["involvedObject"]["kind"], "^(Pod|ReplicaSet)$")
-              - set(resource.attributes["service.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
+              - set(resource.attributes["service.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.deployment.name"] != nil
               - set(resource.attributes["service.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.statefulset.name"] != nil
               - set(resource.attributes["service.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.daemonset.name"] != nil
               - set(resource.attributes["service.name"], resource.attributes["k8s.cronjob.name"]) where resource.attributes["service.name"] == nil and resource.attributes["k8s.cronjob.name"] != nil
