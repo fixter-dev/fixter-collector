@@ -18,8 +18,6 @@ ANNOTATED_SERVICE="smoke-annotated-service"
 kubectl run "$PROBE" --image=busybox:1.36 --restart=Never \
   --annotations="resource.opentelemetry.io/service.name=${ANNOTATED_SERVICE}" \
   -- sh -c 'while true; do echo smoke; sleep 2; done' >/dev/null
-# The annotation sits on the Job only, never on its pod template, so the name can
-# reach a Job's own Events solely through the Job.
 kubectl apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
 kind: Job
@@ -38,9 +36,7 @@ spec:
 EOF
 kubectl create job "$PLAIN_JOB" --image=busybox:1.36 -- sh -c 'echo smoke' >/dev/null
 
-# Prints "<service.name>|<k8s.job.name>" of the resource each "Created pod: <job>-..."
-# Job Event arrived under, one line per record.
-job_event_resources() {
+service_and_job_of_created_pod_events() {
   awk -v job="$2" '
     /^Resource(Log|Metric|Span)s? #/ { svc = ""; jobname = "" }
     /-> service\.name: Str\(/ { svc = $0; sub(/.*Str\(/, "", svc); sub(/\)$/, "", svc) }
@@ -61,8 +57,8 @@ for i in $(seq 1 24); do
   SCRAPED=$(grep -c "Name: otelcol_" <<<"$LOGS" || true)
   ANNOTATED=$(grep -c "service.name: Str(${ANNOTATED_SERVICE})" <<<"$LOGS" || true)
   DERIVED=$(grep -c "service.name: Str(otlp-sink)" <<<"$LOGS" || true)
-  ANNOTATED_JOB_EVENTS=$(job_event_resources "$LOGS" "$ANNOTATED_JOB")
-  PLAIN_JOB_EVENTS=$(job_event_resources "$LOGS" "$PLAIN_JOB")
+  ANNOTATED_JOB_EVENTS=$(service_and_job_of_created_pod_events "$LOGS" "$ANNOTATED_JOB")
+  PLAIN_JOB_EVENTS=$(service_and_job_of_created_pod_events "$LOGS" "$PLAIN_JOB")
   ANNOTATED_JOB_NAMED=$(grep -cx "${ANNOTATED_JOB_SERVICE}|${ANNOTATED_JOB}" <<<"$ANNOTATED_JOB_EVENTS" || true)
   PLAIN_JOB_DERIVED=$(grep -cx "${PLAIN_JOB}|${PLAIN_JOB}" <<<"$PLAIN_JOB_EVENTS" || true)
   if [ -n "$ANNOTATED_JOB_EVENTS" ] && grep -qvx "${ANNOTATED_JOB_SERVICE}|${ANNOTATED_JOB}" <<<"$ANNOTATED_JOB_EVENTS"; then
