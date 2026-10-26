@@ -83,6 +83,8 @@ data:
               - set(attributes["k8s.event.type"], body["object"]["type"]) where body["object"]["type"] != nil
               - set(resource.attributes["k8s.pod.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["kind"] == "Pod"
               - set(resource.attributes["k8s.namespace.name"], body["object"]["involvedObject"]["namespace"]) where body["object"]["involvedObject"]["kind"] == "Pod"
+              - set(resource.attributes["k8s.job.name"], body["object"]["involvedObject"]["name"]) where body["object"]["involvedObject"]["kind"] == "Job"
+              - set(resource.attributes["k8s.job.uid"], body["object"]["involvedObject"]["uid"]) where body["object"]["involvedObject"]["kind"] == "Job" and body["object"]["involvedObject"]["uid"] != nil
               - set(severity_text, "WARN") where body["object"]["type"] == "Warning"
               - set(severity_text, "INFO") where body["object"]["type"] == "Normal"
               - set(time, Time(body["object"]["lastTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) where body["object"]["lastTimestamp"] != nil
@@ -93,6 +95,10 @@ data:
         passthrough: false
         extract:
           otel_annotations: true
+          annotations:
+            - tag_name: $$1
+              key_regex: resource\.opentelemetry\.io/(.+)
+              from: job
           metadata:
             - k8s.deployment.name
             - k8s.statefulset.name
