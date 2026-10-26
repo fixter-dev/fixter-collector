@@ -111,6 +111,7 @@ data:
         filter:
           node_from_env_var: K8S_NODE_NAME
         extract:
+          otel_annotations: true
           metadata:
             - k8s.namespace.name
             - k8s.pod.name

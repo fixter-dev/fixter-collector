@@ -265,7 +265,7 @@ tests:
           pattern: 'set\(resource.attributes\["k8s.namespace.name"\], body\["object"\]\["involvedObject"\]\["namespace"\]\) where body\["object"\]\["involvedObject"\]\["kind"\] == "Pod"'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "k8s_attributes:\\n    auth_type: serviceAccount\\n    passthrough: false\\n    extract:\\n      metadata:\\n        - k8s.deployment.name\\n        - k8s.statefulset.name\\n        - k8s.daemonset.name\\n        - k8s.cronjob.name\\n        - k8s.job.name\\n    pod_association:\\n      - sources:\\n          - from: resource_attribute\\n            name: k8s.pod.name\\n          - from: resource_attribute\\n            name: k8s.namespace.name\\n"
+          pattern: "k8s_attributes:\\n    auth_type: serviceAccount\\n    passthrough: false\\n    extract:\\n      otel_annotations: true\\n      metadata:\\n        - k8s.deployment.name\\n        - k8s.statefulset.name\\n        - k8s.daemonset.name\\n        - k8s.cronjob.name\\n        - k8s.job.name\\n    pod_association:\\n      - sources:\\n          - from: resource_attribute\\n            name: k8s.pod.name\\n          - from: resource_attribute\\n            name: k8s.namespace.name\\n"
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "node_from_env_var"
@@ -292,7 +292,7 @@ tests:
           pattern: 'replace_pattern\(attributes\["k8s.workload.name"\], "-\[bcdfghjklmnpqrstvwxz2456789\]\{6,10\}\$", ""\) where IsMatch\(body\["object"\]\["involvedObject"\]\["kind"\], "\^\(Pod\|ReplicaSet\)\$"\)'
       - matchRegex:
           path: data["config.yaml"]
-          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.deployment.name"\]\) where resource.attributes\["k8s.deployment.name"\] != nil\n'
+          pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.deployment.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.deployment.name"\] != nil\n'
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'set\(resource.attributes\["service.name"\], resource.attributes\["k8s.statefulset.name"\]\) where resource.attributes\["service.name"\] == nil and resource.attributes\["k8s.statefulset.name"\] != nil\n'
