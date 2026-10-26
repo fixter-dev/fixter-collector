@@ -129,6 +129,12 @@ derived name for pod logs, pod metrics and Kubernetes Events, while
 `resource.opentelemetry.io/<key>` annotation likewise becomes resource
 attribute `<key>`. Pods without such annotations keep exactly the derived names.
 
+Events about a Job itself (`Created pod`, `Completed`, `BackoffLimitExceeded`,
+`DeadlineExceeded`) concern no pod, so they take their names from the Job's own
+`resource.opentelemetry.io/<key>` annotations instead, keeping `k8s.job.name`.
+Annotate the Job metadata as well as its pod template to name both; a Job
+without the annotation keeps its own name.
+
 ## Log volume
 
 Pod logs are on by default. `kube-system` and the collector's own pods are
