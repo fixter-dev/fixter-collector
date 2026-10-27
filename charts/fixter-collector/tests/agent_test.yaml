@@ -1003,3 +1003,18 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: 'file_log/doris-fe:'
+
+  - it: keeps the agent alive through a node whose CPU is pinned by another pod
+    template: daemonset-agent.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.timeoutSeconds
+          value: 5
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.failureThreshold
+          value: 6
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.timeoutSeconds
+          value: 5
