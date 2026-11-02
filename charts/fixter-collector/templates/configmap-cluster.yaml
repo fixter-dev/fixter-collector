@@ -19,6 +19,18 @@ data:
       k8s_cluster:
         auth_type: serviceAccount
         collection_interval: 30s
+        resource_attributes:
+          k8s.container.status.last_terminated_reason:
+            enabled: true
+      {{- end }}
+      {{- if .Values.cluster.autoscalers }}
+      k8s_objects/autoscalers:
+        auth_type: serviceAccount
+        objects:
+          - name: horizontalpodautoscalers
+            group: autoscaling
+            mode: pull
+            interval: 5m
       {{- end }}
       {{- if .Values.cluster.events }}
       k8s_objects:
@@ -70,6 +82,50 @@ data:
               - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"]) where resource.attributes["k8s.deployment.name"] != nil
               - set(attributes["k8s.statefulset.name"], resource.attributes["k8s.statefulset.name"]) where resource.attributes["k8s.statefulset.name"] != nil
               - set(attributes["k8s.daemonset.name"], resource.attributes["k8s.daemonset.name"]) where resource.attributes["k8s.daemonset.name"] != nil
+              - set(attributes["k8s.cronjob.name"], resource.attributes["k8s.cronjob.name"]) where resource.attributes["k8s.cronjob.name"] != nil
+              - set(attributes["k8s.job.name"], resource.attributes["k8s.job.name"]) where resource.attributes["k8s.job.name"] != nil
+      {{- if .Values.cluster.clusterMetrics }}
+      k8s_attributes/metrics:
+        auth_type: serviceAccount
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.deployment.name
+            - k8s.statefulset.name
+            - k8s.daemonset.name
+            - k8s.cronjob.name
+            - k8s.job.name
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.name
+              - from: resource_attribute
+                name: k8s.namespace.name
+      {{- end }}
+      {{- if .Values.cluster.autoscalers }}
+      transform/k8s_autoscaler:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - set(attributes["k8s.namespace.name"], body["metadata"]["namespace"]) where body["metadata"]["namespace"] != nil
+              - set(attributes["k8s.hpa.name"], body["metadata"]["name"]) where body["metadata"]["name"] != nil
+              - set(attributes["k8s.hpa.scaletargetref.kind"], body["spec"]["scaleTargetRef"]["kind"]) where body["spec"]["scaleTargetRef"]["kind"] != nil
+              - set(attributes["k8s.hpa.scaletargetref.name"], body["spec"]["scaleTargetRef"]["name"]) where body["spec"]["scaleTargetRef"]["name"] != nil
+              - set(attributes["k8s.hpa.min_replicas"], body["spec"]["minReplicas"]) where body["spec"]["minReplicas"] != nil
+              - set(attributes["k8s.hpa.max_replicas"], body["spec"]["maxReplicas"]) where body["spec"]["maxReplicas"] != nil
+              {{- range $index := until 4 }}
+              {{- range $resource := list "cpu" "memory" }}
+              {{- range $target := list (dict "type" "Utilization" "field" "averageUtilization" "attribute" "utilization") (dict "type" "AverageValue" "field" "averageValue" "attribute" "average_value") }}
+              {{- $metric := printf "body[\"spec\"][\"metrics\"][%d]" $index }}
+              - set(attributes["k8s.hpa.target.{{ $resource }}.{{ $target.attribute }}"], {{ $metric }}["resource"]["target"]["{{ $target.field }}"]) where body["spec"]["metrics"] != nil and Len(body["spec"]["metrics"]) > {{ $index }} and {{ $metric }}["type"] == "Resource" and {{ $metric }}["resource"]["name"] == "{{ $resource }}" and {{ $metric }}["resource"]["target"]["type"] == "{{ $target.type }}" and {{ $metric }}["resource"]["target"]["{{ $target.field }}"] != nil
+              {{- end }}
+              {{- end }}
+              {{- end }}
+              - set(severity_text, "INFO")
+              - set(resource.attributes["service.name"], "kubernetes")
+              - set(body, Format("%s scales %s/%s between %d and %d", [body["metadata"]["name"], body["spec"]["scaleTargetRef"]["kind"], body["spec"]["scaleTargetRef"]["name"], body["spec"]["minReplicas"], body["spec"]["maxReplicas"]])) where body["metadata"]["name"] != nil and body["spec"]["scaleTargetRef"]["kind"] != nil and body["spec"]["scaleTargetRef"]["name"] != nil and body["spec"]["minReplicas"] != nil and body["spec"]["maxReplicas"] != nil
+      {{- end }}
       {{- if .Values.cluster.events }}
       transform/k8s_event_identity:
         error_mode: ignore
@@ -149,13 +205,20 @@ data:
             {{- if or .Values.integrations.prometheus.targets .Values.integrations.prometheus.scrapeConfigs }}
             - prometheus
             {{- end }}
-          processors: [memory_limiter, resource_detection, resource, transform/k8s_identity, batch]
+          processors: [memory_limiter, resource_detection, resource, {{ if .Values.cluster.clusterMetrics }}k8s_attributes/metrics, {{ end }}transform/k8s_identity, batch]
           exporters: [otlp_http]
         {{- if .Values.cluster.events }}
         logs:
           receivers:
             - k8s_objects
           processors: [memory_limiter, transform/k8s_event_identity, k8s_attributes, resource_detection, resource, transform/k8s_event_service, batch]
+          exporters: [otlp_http]
+        {{- end }}
+        {{- if .Values.cluster.autoscalers }}
+        logs/autoscalers:
+          receivers:
+            - k8s_objects/autoscalers
+          processors: [memory_limiter, transform/k8s_autoscaler, resource_detection, resource, batch]
           exporters: [otlp_http]
         {{- end }}
 {{- end }}

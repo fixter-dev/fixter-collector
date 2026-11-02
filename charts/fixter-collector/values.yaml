@@ -17,6 +17,7 @@ cluster:
   enabled: true
   clusterMetrics: true
   events: true
+  autoscalers: true
   tolerations:
     - operator: Exists
   resources:

@@ -353,6 +353,7 @@ tests:
     set:
       fixter.apiKey: test-key-123
       cluster.events: false
+      cluster.autoscalers: false
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
@@ -368,7 +369,7 @@ tests:
           pattern: "transform/k8s_event_service"
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "k8s_attributes"
+          pattern: "k8s_attributes:"
 
   - it: copies pod and workload identity onto metric datapoints
     template: configmap-cluster.yaml
@@ -410,7 +411,7 @@ tests:
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "processors: \\[memory_limiter, resource_detection, resource, transform/k8s_identity, batch\\]"
+          pattern: "processors: \\[memory_limiter, resource_detection, resource, k8s_attributes/metrics, transform/k8s_identity, batch\\]"
 
   - it: renders raw scrapeConfigs verbatim so an existing prometheus.yml can be pasted in
     template: configmap-cluster.yaml
