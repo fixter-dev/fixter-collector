@@ -1,0 +1,183 @@
+suite: cluster collector autoscalers and workload owners
+templates:
+  - configmap-cluster.yaml
+tests:
+  - it: names the owning workload on cluster metrics
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: &metricsOwnerProcessor "k8s_attributes/metrics:\n    auth_type: serviceAccount\n    passthrough: false\n    extract:\n      metadata:\n        - k8s.deployment.name\n        - k8s.statefulset.name\n        - k8s.daemonset.name\n        - k8s.cronjob.name\n        - k8s.job.name\n    pod_association:\n      - sources:\n          - from: resource_attribute\n            name: k8s.pod.name\n          - from: resource_attribute\n            name: k8s.namespace.name"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "resource, k8s_attributes/metrics, transform/k8s_identity"
+
+  - it: defines the metrics owner processor even with events off
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      cluster.events: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: *metricsOwnerProcessor
+
+  - it: reports the last termination reason
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "resource_attributes:\n      k8s.container.status.last_terminated_reason:\n        enabled: true"
+
+  - it: copies cronjob and job to datapoints but keeps the termination reason on the resource
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.cronjob.name"\], resource.attributes\["k8s.cronjob.name"\]\) where resource.attributes\["k8s.cronjob.name"\] != nil'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.job.name"\], resource.attributes\["k8s.job.name"\]\) where resource.attributes\["k8s.job.name"\] != nil'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.container.status.last_terminated_reason"\], resource.attributes\["k8s.container.status.last_terminated_reason"\]\) where resource.attributes\["k8s.container.status.last_terminated_reason"\] != nil'
+
+  - it: pulls HPA objects every five minutes by default
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s_objects/autoscalers:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'name: horizontalpodautoscalers'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'group: autoscaling'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'mode: pull'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'interval: 5m'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'logs/autoscalers:\n      receivers:\n        - k8s_objects/autoscalers'
+
+  - it: leaves HPA objects out when cluster.autoscalers is false
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      cluster.autoscalers: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s_objects/autoscalers'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'logs/autoscalers'
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'transform/k8s_autoscaler'
+
+  - it: pulls HPA objects with events off
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+      cluster.events: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s_objects/autoscalers:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'logs/autoscalers:'
+
+  - it: flattens HPA targets into attributes
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'transform/k8s_autoscaler:'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'error_mode: ignore'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.namespace.name"\], body\["metadata"\]\["namespace"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.name"\], body\["metadata"\]\["name"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.scaletargetref.kind"\], body\["spec"\]\["scaleTargetRef"\]\["kind"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.scaletargetref.name"\], body\["spec"\]\["scaleTargetRef"\]\["name"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.min_replicas"\], body\["spec"\]\["minReplicas"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.max_replicas"\], body\["spec"\]\["maxReplicas"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.target.cpu.utilization"\], body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageUtilization"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.target.memory.utilization"\], body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageUtilization"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.target.cpu.average_value"\], body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageValue"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(attributes\["k8s.hpa.target.memory.average_value"\], body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageValue"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(severity_text, "INFO"\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(resource.attributes\["service.name"\], "kubernetes"\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'set\(body, Format\("%s scales %s/%s between %d and %d"'
+
+  - it: renders targets for metrics at indexes 0 to 3
+    template: configmap-cluster.yaml
+    set:
+      fixter.apiKey: test-key-123
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageUtilization"\]\) where body\["spec"\]\["metrics"\] != nil and Len\(body\["spec"\]\["metrics"\]\) > 0 and body\["spec"\]\["metrics"\]\[0\]\["type"\] == "Resource"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'body\["spec"\]\["metrics"\]\[1\]\["resource"\]\["target"\]\["averageUtilization"\]\) where body\["spec"\]\["metrics"\] != nil and Len\(body\["spec"\]\["metrics"\]\) > 1 and body\["spec"\]\["metrics"\]\[1\]\["type"\] == "Resource"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'body\["spec"\]\["metrics"\]\[2\]\["resource"\]\["target"\]\["averageUtilization"\]\) where body\["spec"\]\["metrics"\] != nil and Len\(body\["spec"\]\["metrics"\]\) > 2 and body\["spec"\]\["metrics"\]\[2\]\["type"\] == "Resource"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'body\["spec"\]\["metrics"\]\[3\]\["resource"\]\["target"\]\["averageUtilization"\]\) where body\["spec"\]\["metrics"\] != nil and Len\(body\["spec"\]\["metrics"\]\) > 3 and body\["spec"\]\["metrics"\]\[3\]\["type"\] == "Resource"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s.hpa.target.memory.average_value"\], body\["spec"\]\["metrics"\]\[0\]\["resource"\]\["target"\]\["averageValue"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s.hpa.target.memory.average_value"\], body\["spec"\]\["metrics"\]\[1\]\["resource"\]\["target"\]\["averageValue"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s.hpa.target.memory.average_value"\], body\["spec"\]\["metrics"\]\[2\]\["resource"\]\["target"\]\["averageValue"\]\)'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'k8s.hpa.target.memory.average_value"\], body\["spec"\]\["metrics"\]\[3\]\["resource"\]\["target"\]\["averageValue"\]\)'

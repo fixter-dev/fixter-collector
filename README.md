@@ -99,6 +99,16 @@ precisely when you want them. Turn them off with:
 
     --set cluster.events=false
 
+HorizontalPodAutoscalers are pulled every 5 minutes as one INFO log row each
+under the service `kubernetes`, with the target, replica bounds and CPU/memory
+targets as attributes (`k8s.hpa.name`, `k8s.hpa.scaletargetref.kind`,
+`k8s.hpa.scaletargetref.name`, `k8s.hpa.min_replicas`, `k8s.hpa.max_replicas`,
+`k8s.hpa.target.{cpu,memory}.utilization`, `k8s.hpa.target.{cpu,memory}.average_value`).
+Average values keep the Kubernetes quantity (`400m`, `1Gi`); absent targets are
+absent. This is independent of `cluster.events`; turn it off with:
+
+    --set cluster.autoscalers=false
+
 ## Sending app telemetry
 
 Point your apps at the agent's Service — named `<release>-fixter-collector-agent`
